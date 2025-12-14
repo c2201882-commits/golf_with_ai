@@ -1,0 +1,5 @@
+{
+  "name": "Golf Master Pro",
+  "description": "A professional golf scorecard and tracking PWA with offline persistence and data analysis.",
+  "requestFramePermissions": []
+}

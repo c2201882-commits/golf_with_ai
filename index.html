@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>Golf Master Pro</title>
+    
+    <!-- PWA Settings -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Golf Master" />
+    <meta name="theme-color" content="#15803d" />
+    
+    <!-- Icons: Realistic 3D Golf Ball -->
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><defs><radialGradient id='grad1' cx='30%' cy='30%' r='70%'><stop offset='0%' style='stop-color:rgb(255,255,255);stop-opacity:1' /><stop offset='50%' style='stop-color:rgb(240,240,240);stop-opacity:1' /><stop offset='100%' style='stop-color:rgb(180,180,180);stop-opacity:1' /></radialGradient><filter id='inset-shadow'><feOffset dx='1' dy='1'/><feGaussianBlur stdDeviation='2' result='offset-blur' /><feComposite operator='out' in='SourceGraphic' in2='offset-blur' result='inverse' /><feFlood flood-color='black' flood-opacity='0.2' result='color' /><feComposite operator='in' in='color' in2='inverse' result='shadow' /><feComposite operator='over' in='shadow' in2='SourceGraphic' /></filter></defs><circle cx='256' cy='256' r='240' fill='url(%23grad1)' stroke='%23d1d5db' stroke-width='2'/><g opacity='0.3'><circle cx='200' cy='200' r='20' fill='%23aaa' filter='url(%23inset-shadow)'/><circle cx='260' cy='180' r='20' fill='%23aaa' filter='url(%23inset-shadow)'/><circle cx='320' cy='200' r='20' fill='%23aaa' filter='url(%23inset-shadow)'/><circle cx='160' cy='250' r='20' fill='%23aaa' filter='url(%23inset-shadow)'/><circle cx='220' cy='250' r='20' fill='%23aaa' filter='url(%23inset-shadow)'/><circle cx='290' cy='250' r='20' fill='%23aaa' filter='url(%23inset-shadow)'/><circle cx='360' cy='250' r='20' fill='%23aaa' filter='url(%23inset-shadow)'/><circle cx='200' cy='310' r='20' fill='%23aaa' filter='url(%23inset-shadow)'/><circle cx='270' cy='310' r='20' fill='%23aaa' filter='url(%23inset-shadow)'/><circle cx='330' cy='310' r='20' fill='%23aaa' filter='url(%23inset-shadow)'/><circle cx='256' cy='120' r='18' fill='%23aaa' filter='url(%23inset-shadow)'/><circle cx='256' cy='370' r='18' fill='%23aaa' filter='url(%23inset-shadow)'/></g></svg>" />
+    
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><defs><radialGradient id='grad1' cx='30%' cy='30%' r='70%'><stop offset='0%' style='stop-color:rgb(255,255,255);stop-opacity:1' /><stop offset='50%' style='stop-color:rgb(240,240,240);stop-opacity:1' /><stop offset='100%' style='stop-color:rgb(180,180,180);stop-opacity:1' /></radialGradient></defs><circle cx='256' cy='256' r='240' fill='url(%23grad1)' stroke='%239ca3af' stroke-width='10'/><circle cx='200' cy='200' r='20' fill='%23cbd5e1'/><circle cx='260' cy='180' r='20' fill='%23cbd5e1'/><circle cx='320' cy='200' r='20' fill='%23cbd5e1'/><circle cx='160' cy='250' r='20' fill='%23cbd5e1'/><circle cx='220' cy='250' r='20' fill='%23cbd5e1'/><circle cx='290' cy='250' r='20' fill='%23cbd5e1'/><circle cx='360' cy='250' r='20' fill='%23cbd5e1'/><circle cx='200' cy='310' r='20' fill='%23cbd5e1'/><circle cx='270' cy='310' r='20' fill='%23cbd5e1'/><circle cx='330' cy='310' r='20' fill='%23cbd5e1'/></svg>" />
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: '#15803d', // green-700
+              secondary: '#f97316', // orange-500
+              surface: '#f3f4f6', // gray-100
+            },
+            fontFamily: {
+              sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+            },
+            animation: {
+              'fade-in': 'fadeIn 0.3s ease-out',
+              'slide-up': 'slideUp 0.3s ease-out',
+            },
+            keyframes: {
+              fadeIn: {
+                '0%': { opacity: '0' },
+                '100%': { opacity: '1' },
+              },
+              slideUp: {
+                '0%': { transform: 'translateY(20px)', opacity: '0' },
+                '100%': { transform: 'translateY(0)', opacity: '1' },
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      /* Hide scrollbar for Chrome, Safari and Opera */
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      /* Hide scrollbar for IE, Edge and Firefox */
+      .no-scrollbar {
+        -ms-overflow-style: none;  /* IE and Edge */
+        scrollbar-width: none;  /* Firefox */
+      }
+      body {
+        overscroll-behavior-y: none; /* Prevent pull-to-refresh on mobile */
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      /* --- Safe Area Utilities --- */
+      /* Added generous padding to prevent iPhone bottom blocking */
+      
+      .pt-safe-top {
+        padding-top: 1rem; /* Fallback */
+        padding-top: calc(1rem + env(safe-area-inset-top));
+      }
+
+      .pb-safe-bottom {
+        padding-bottom: 2rem; /* INCREASED Fallback to 32px */
+        padding-bottom: calc(2rem + env(safe-area-inset-bottom));
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.1",
+    "react/": "https://esm.sh/react@^19.2.1/",
+    "lucide-react": "https://esm.sh/lucide-react@^0.560.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.1/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.33.0"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body class="bg-gray-50 text-gray-900 h-[100dvh] w-screen overflow-hidden">
+    <div id="root" class="h-full w-full"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>
