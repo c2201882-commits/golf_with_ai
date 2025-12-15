@@ -232,4 +232,51 @@ export const PlayHole: React.FC = () => {
                           <select 
                             value={editFormClub} 
                             onChange={(e) => setEditFormClub(e.target.value)}
-                            className="w-full appearance-
+                            className="w-full appearance-none bg-gray-50 border border-gray-200 text-gray-900 text-lg font-bold rounded-xl py-3 px-4 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                          >
+                              {/* Combine current bag + Penalty + Putter for options */}
+                              {[...state.myBag, 'Penalty'].filter((v, i, a) => a.indexOf(v) === i).map(c => (
+                                  <option key={c} value={c}>{c}</option>
+                              ))}
+                          </select>
+                          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-500">
+                              <ChevronDown size={20} />
+                          </div>
+                      </div>
+                  </div>
+                  
+                  {/* Distance Input */}
+                  <div className="mb-8">
+                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">{t('distance')}</label>
+                      <input 
+                        ref={distInputRef}
+                        type="number" 
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={editFormDist}
+                        onChange={(e) => setEditFormDist(e.target.value)}
+                        className="w-full text-center text-4xl font-bold border-b-2 border-gray-300 py-2 focus:outline-none focus:border-primary placeholder-gray-200"
+                        placeholder="--"
+                      />
+                  </div>
+
+                  <div className="flex gap-3">
+                      <button 
+                        onClick={deleteShot}
+                        className="p-4 bg-red-50 text-red-500 rounded-xl font-bold flex items-center justify-center"
+                      >
+                          <Trash2 size={24} />
+                      </button>
+                      <button 
+                        onClick={saveEdit}
+                        className="flex-1 py-3 bg-primary text-white rounded-xl font-bold shadow-lg active:scale-95 transition-transform"
+                      >
+                          {t('saveChanges')}
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+    </div>
+  );
+};

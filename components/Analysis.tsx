@@ -3,7 +3,7 @@ import { useGame } from '../context/GameContext';
 import { Download, ChevronRight, Play, Save, Trash2, Trophy } from 'lucide-react';
 
 export const Analysis: React.FC = () => {
-  const { state, dispatch } = useGame();
+  const { state, dispatch, t } = useGame();
   
   const [courseName, setCourseName] = useState('');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10)); // YYYY-MM-DD
@@ -42,7 +42,7 @@ export const Analysis: React.FC = () => {
   const handleFinishGame = (e: React.FormEvent) => {
     e.preventDefault();
     if(!courseName.trim()) {
-        alert("Please enter a course name.");
+        alert(t('enterCourse'));
         return;
     }
     
@@ -57,7 +57,7 @@ export const Analysis: React.FC = () => {
   };
 
   const handleDiscardGame = () => {
-      if(confirm("Are you sure you want to discard this round? All data for this session will be lost.")) {
+      if(confirm(t('confirmDiscard'))) {
           // This calls the enhanced RESET_GAME reducer which wipes all current game data
           dispatch({ type: 'RESET_GAME' });
       }
@@ -68,29 +68,29 @@ export const Analysis: React.FC = () => {
       {/* Score Header */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
         <h2 className="text-xl font-bold text-gray-800 mb-6 flex justify-between">
-            <span>Current Round</span>
+            <span>{t('currentRound')}</span>
             <span className="text-primary text-base font-normal">{state.userName}</span>
         </h2>
         
         <div className="grid grid-cols-2 gap-4 text-center">
             <div className="bg-gray-50 rounded-xl p-4">
-                <div className="text-gray-400 text-xs font-bold uppercase tracking-wider">Score</div>
+                <div className="text-gray-400 text-xs font-bold uppercase tracking-wider">{t('score')}</div>
                 <div className="text-3xl font-black text-gray-900 mt-1">{totalScore}</div>
                 <div className={`text-sm font-bold ${scoreDiff > 0 ? 'text-red-500' : 'text-blue-500'}`}>
                     {scoreDiffDisplay}
                 </div>
             </div>
             <div className="bg-gray-50 rounded-xl p-4">
-                <div className="text-gray-400 text-xs font-bold uppercase tracking-wider">Putts</div>
+                <div className="text-gray-400 text-xs font-bold uppercase tracking-wider">{t('putts')}</div>
                 <div className="text-3xl font-black text-gray-900 mt-1">{totalPutts}</div>
                 <div className="text-sm text-gray-500 font-medium">Total</div>
             </div>
             <div className="bg-gray-50 rounded-xl p-4">
-                <div className="text-gray-400 text-xs font-bold uppercase tracking-wider">GIR</div>
+                <div className="text-gray-400 text-xs font-bold uppercase tracking-wider">{t('gir')}</div>
                 <div className="text-3xl font-black text-primary mt-1">{girPercentage}%</div>
             </div>
             <div className="bg-gray-50 rounded-xl p-4">
-                <div className="text-gray-400 text-xs font-bold uppercase tracking-wider">Holes</div>
+                <div className="text-gray-400 text-xs font-bold uppercase tracking-wider">{t('holes')}</div>
                 <div className="text-3xl font-black text-gray-900 mt-1">{state.history.length}</div>
             </div>
         </div>
@@ -101,7 +101,7 @@ export const Analysis: React.FC = () => {
              onClick={downloadCSV}
              className="flex-1 bg-blue-50 text-blue-600 py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-transform border border-blue-200"
           >
-              <Download size={18} /> Export CSV
+              <Download size={18} /> {t('exportCsv')}
           </button>
           
           {state.history.length < 18 && (
@@ -109,7 +109,7 @@ export const Analysis: React.FC = () => {
                 onClick={() => dispatch({ type: 'RESUME_GAME' })}
                 className="flex-1 bg-primary text-white py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-md shadow-green-200"
               >
-                  <Play size={18} /> Resume
+                  <Play size={18} /> {t('resume')}
               </button>
           )}
       </div>
@@ -120,9 +120,9 @@ export const Analysis: React.FC = () => {
               <thead className="bg-primary text-white">
                   <tr>
                       <th className="py-3 px-2 text-center">H</th>
-                      <th className="py-3 px-2 text-center">Par</th>
+                      <th className="py-3 px-2 text-center">{t('par')}</th>
                       <th className="py-3 px-2 text-center">Scr</th>
-                      <th className="py-3 px-2 text-center">Putts</th>
+                      <th className="py-3 px-2 text-center">{t('putts')}</th>
                       <th className="py-3 px-2 text-center">GIR</th>
                       <th className="py-3 px-2 w-8"></th>
                   </tr>
@@ -162,7 +162,7 @@ export const Analysis: React.FC = () => {
         <div className="bg-gray-900 text-white p-6 rounded-2xl mb-8 shadow-lg">
             <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
                 <Trophy size={20} className="text-yellow-400" />
-                Finish & Save Round
+                {t('finishSave')}
             </h3>
             <p className="text-sm text-gray-300 mb-6">
                 Enter details below to permanently save this round to your history.
@@ -170,7 +170,7 @@ export const Analysis: React.FC = () => {
             
             <form onSubmit={handleFinishGame} className="space-y-4">
                 <div>
-                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">Course Name</label>
+                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">{t('courseName')}</label>
                     <input 
                         required
                         type="text" 
@@ -182,7 +182,7 @@ export const Analysis: React.FC = () => {
                 </div>
                 
                 <div>
-                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">Date played</label>
+                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">{t('datePlayed')}</label>
                     <input 
                         required
                         type="date" 
@@ -196,7 +196,7 @@ export const Analysis: React.FC = () => {
                   type="submit"
                   className="w-full bg-green-600 hover:bg-green-500 text-white py-4 rounded-xl font-bold text-lg shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2 mt-2"
                 >
-                    <Save size={20} /> Save to History
+                    <Save size={20} /> {t('saveHistory')}
                 </button>
             </form>
         </div>
@@ -209,7 +209,7 @@ export const Analysis: React.FC = () => {
                 onClick={handleDiscardGame}
                 className="text-red-400 text-sm font-semibold flex items-center justify-center gap-2 mx-auto hover:text-red-500 px-4 py-2 border border-red-100 rounded-lg hover:bg-red-50 transition-colors"
             >
-                <Trash2 size={16} /> Discard round & start new
+                <Trash2 size={16} /> {t('discardRound')}
             </button>
           </div>
       )}
