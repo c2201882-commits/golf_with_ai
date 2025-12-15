@@ -53,6 +53,11 @@ export const PastGames: React.FC = () => {
     setAnalysisResult(null);
 
     try {
+      const apiKey = process.env.API_KEY;
+      if (!apiKey) {
+          throw new Error("API Key is missing. Please check Vercel Environment Variables (API_KEY).");
+      }
+
       // 1. Construct the data prompt
       const scoreDiff = round.totalScore - round.totalPar;
       const scoreString = scoreDiff > 0 ? `+${scoreDiff}` : scoreDiff === 0 ? 'Even' : `${scoreDiff}`;
@@ -93,7 +98,7 @@ export const PastGames: React.FC = () => {
       `;
 
       // 2. Call Gemini API
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: prompt,
@@ -101,9 +106,15 @@ export const PastGames: React.FC = () => {
 
       setAnalysisResult(response.text || "Could not generate analysis. Please try again.");
 
-    } catch (error) {
+    } catch (error: any) {
       console.error("AI Analysis Error:", error);
-      setAnalysisResult("Sorry, I encountered an error analyzing your round. Please check your connection and try again.");
+      const errorMessage = error.message || "Unknown error";
+      
+      if (errorMessage.includes("API Key is missing")) {
+          setAnalysisResult("Configuration Error: API Key is missing. Please set 'API_KEY' in Vercel Settings.");
+      } else {
+          setAnalysisResult(`Sorry, I encountered an error: ${errorMessage}. Please check your connection.`);
+      }
     } finally {
       setIsAnalyzing(false);
     }
