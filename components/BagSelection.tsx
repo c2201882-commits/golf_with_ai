@@ -7,6 +7,8 @@ export const BagSelection: React.FC = () => {
   const { state, dispatch, t } = useGame();
   const [customClub, setCustomClub] = useState('');
 
+  const hasActiveGame = state.history.length > 0 || state.currentShots.length > 0;
+
   const toggleClub = (club: ClubName) => {
     let newBag = [...state.myBag];
     if (newBag.includes(club)) {
@@ -33,8 +35,12 @@ export const BagSelection: React.FC = () => {
   };
 
   const confirm = () => {
-    // Bag is already updated in global state via toggleClub, so we just move to the next view
-    dispatch({ type: 'SET_VIEW', payload: 'HOLE_SETUP' });
+    if (hasActiveGame) {
+        // If mid-game, just return to play view
+        dispatch({ type: 'SET_VIEW', payload: 'PLAY' });
+    } else {
+        dispatch({ type: 'SET_VIEW', payload: 'HOLE_SETUP' });
+    }
   };
 
   // Separate standard clubs from custom ones for display logic
@@ -112,7 +118,7 @@ export const BagSelection: React.FC = () => {
           onClick={confirm}
           className="w-full bg-primary text-white py-3.5 rounded-xl font-bold text-lg shadow-lg active:scale-[0.98] transition-transform"
         >
-          {t('startGame')}
+          {hasActiveGame ? t('done') : t('startGame')}
         </button>
       </div>
     </div>

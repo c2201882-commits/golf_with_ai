@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useGame } from '../context/GameContext';
 import { ClubName, Shot } from '../types';
-import { Trash2, Edit2, CheckCircle, X, ChevronDown, Flag, Settings2 } from 'lucide-react';
+import { Trash2, Edit2, CheckCircle, X, ChevronDown, Flag, Settings2, Briefcase } from 'lucide-react';
 
 export const PlayHole: React.FC = () => {
   const { state, dispatch, t } = useGame();
@@ -109,14 +109,23 @@ export const PlayHole: React.FC = () => {
         <div className="flex items-center gap-3">
            <div>
               <div className="text-xs text-gray-500 font-bold uppercase tracking-wide">{t('hole')} {state.currentHole}</div>
-              <div className="text-xl font-black text-gray-800 flex items-center gap-1">
+              <div className="text-xl font-black text-gray-800 flex items-center gap-2">
                 {t('par')} {state.currentPar}
-                <button 
-                  onClick={() => setShowParModal(true)}
-                  className="p-1 text-gray-400 hover:text-primary transition-colors"
-                >
-                  <Settings2 size={16} />
-                </button>
+                <div className="flex items-center gap-1 ml-1">
+                    <button 
+                      onClick={() => setShowParModal(true)}
+                      className="p-1.5 bg-gray-50 text-gray-400 hover:text-primary rounded-lg transition-colors border border-gray-100"
+                    >
+                      <Settings2 size={16} />
+                    </button>
+                    <button 
+                      onClick={() => dispatch({ type: 'SET_VIEW', payload: 'BAG_SETUP' })}
+                      className="p-1.5 bg-gray-50 text-gray-400 hover:text-primary rounded-lg transition-colors border border-gray-100"
+                      title={t('editBag')}
+                    >
+                      <Briefcase size={16} />
+                    </button>
+                </div>
               </div>
            </div>
         </div>

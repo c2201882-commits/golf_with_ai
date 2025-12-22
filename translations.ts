@@ -76,7 +76,9 @@ export const translations = {
     analysisMode: "Analysis Mode",
     copy: "Copy",
     copied: "Copied!",
-    exportImage: "Share Scorecard (Image)"
+    exportImage: "Share Scorecard (Image)",
+    editBag: "Manage Bag",
+    done: "Done"
   },
   "zh-TW": {
     appTitle: "高爾夫大師 Pro",
@@ -153,6 +155,8 @@ export const translations = {
     analysisMode: "分析模式",
     copy: "複製文字",
     copied: "已複製！",
-    exportImage: "分享成績單 (匯出圖片)"
+    exportImage: "分享成績單 (匯出圖片)",
+    editBag: "管理球桿袋",
+    done: "完成"
   }
 };
