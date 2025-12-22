@@ -68,7 +68,15 @@ export const translations = {
     language: "Language",
     english: "English",
     chinese: "繁體中文",
-    selectLanguage: "Select Language"
+    selectLanguage: "Select Language",
+    changePar: "Change Par",
+    shotDetail: "Shot Detail",
+    gentleMode: "Gentle",
+    strictMode: "Strict",
+    analysisMode: "Analysis Mode",
+    copy: "Copy",
+    copied: "Copied!",
+    exportImage: "Share Scorecard (Image)"
   },
   "zh-TW": {
     appTitle: "高爾夫大師 Pro",
@@ -93,7 +101,7 @@ export const translations = {
     teeOff: "開球",
     selectPar: "選擇標準桿",
     skipAnalysis: "跳至分析",
-    hole: "第", // Used as "第 X 洞" logic or just Hole X
+    hole: "第", 
     par: "標準桿",
     strokes: "桿數",
     shotHistory: "擊球紀錄",
@@ -137,6 +145,14 @@ export const translations = {
     language: "語言設定",
     english: "English",
     chinese: "繁體中文",
-    selectLanguage: "選擇語言"
+    selectLanguage: "選擇語言",
+    changePar: "修改標準桿",
+    shotDetail: "擊球明細",
+    gentleMode: "溫柔模式",
+    strictMode: "嚴厲模式",
+    analysisMode: "分析模式",
+    copy: "複製文字",
+    copied: "已複製！",
+    exportImage: "分享成績單 (匯出圖片)"
   }
 };

@@ -1,37 +1,31 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useGame } from '../context/GameContext';
 import { ClubName, Shot } from '../types';
-import { Trash2, Edit2, CheckCircle, X, ChevronDown, Flag } from 'lucide-react';
+import { Trash2, Edit2, CheckCircle, X, ChevronDown, Flag, Settings2 } from 'lucide-react';
 
 export const PlayHole: React.FC = () => {
   const { state, dispatch, t } = useGame();
   
-  // Edit Modal State
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showParModal, setShowParModal] = useState(false);
   const [editingShotIndex, setEditingShotIndex] = useState<number>(-1);
   
-  // Temporary state for the editing form
   const [editFormClub, setEditFormClub] = useState<ClubName>('');
   const [editFormDist, setEditFormDist] = useState<string>('');
 
   const distInputRef = useRef<HTMLInputElement>(null);
 
-  // --- Helpers ---
   const currentScore = state.currentShots.length;
   const putts = state.currentShots.filter(s => s.club === 'Putter').length;
   const isLastHole = state.currentHole === 18;
 
   useEffect(() => {
     if (showEditModal && distInputRef.current) {
-      // Focus distance input when modal opens
       setTimeout(() => distInputRef.current?.focus(), 100);
     }
   }, [showEditModal]);
 
-  // --- Logic Flow ---
-
   const handleClubClick = (club: ClubName) => {
-    // PASSIVE MODE: Just add the shot. No modals.
     const newShot: Shot = {
       id: Date.now().toString(),
       club,
@@ -62,8 +56,6 @@ export const PlayHole: React.FC = () => {
         }
     });
   };
-
-  // --- Modal Handlers ---
 
   const openEditModal = (idx: number) => {
       const shot = state.currentShots[idx];
@@ -105,15 +97,28 @@ export const PlayHole: React.FC = () => {
       closeEditModal();
   };
 
-  // --- Rendering ---
+  const changePar = (newPar: number) => {
+    dispatch({ type: 'SET_CURRENT_PAR', payload: newPar });
+    setShowParModal(false);
+  };
 
   return (
     <div className="flex flex-col h-full bg-gray-50">
       {/* Top Info Bar */}
       <div className="bg-white px-4 py-3 shadow-sm flex justify-between items-center sticky top-0 z-10">
-        <div>
-           <div className="text-xs text-gray-500 font-bold uppercase tracking-wide">{t('hole')} {state.currentHole}</div>
-           <div className="text-xl font-black text-gray-800">{t('par')} {state.currentPar}</div>
+        <div className="flex items-center gap-3">
+           <div>
+              <div className="text-xs text-gray-500 font-bold uppercase tracking-wide">{t('hole')} {state.currentHole}</div>
+              <div className="text-xl font-black text-gray-800 flex items-center gap-1">
+                {t('par')} {state.currentPar}
+                <button 
+                  onClick={() => setShowParModal(true)}
+                  className="p-1 text-gray-400 hover:text-primary transition-colors"
+                >
+                  <Settings2 size={16} />
+                </button>
+              </div>
+           </div>
         </div>
         <div className="flex flex-col items-end">
             <div className="text-xs text-gray-500 font-bold uppercase tracking-wide">{t('strokes')}</div>
@@ -124,14 +129,13 @@ export const PlayHole: React.FC = () => {
       </div>
 
       {state.isEditingMode && (
-          <div className="bg-orange-100 text-orange-700 text-xs font-bold text-center py-1">
-              EDITING HISTORY MODE
+          <div className="bg-orange-100 text-orange-700 text-[10px] font-black text-center py-1 uppercase tracking-widest">
+              Editing History Mode
           </div>
       )}
 
       {/* Main Grid area */}
       <div className="flex-1 overflow-y-auto p-4 pb-48 no-scrollbar">
-          {/* Shot History List */}
           <div className="mb-6 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
              <div className="bg-gray-50 px-4 py-2 text-xs font-bold text-gray-400 uppercase border-b flex justify-between items-center">
                 <span>{t('shotHistory')}</span>
@@ -144,7 +148,7 @@ export const PlayHole: React.FC = () => {
                      {state.currentShots.map((s, idx) => (
                          <li key={s.id} onClick={() => openEditModal(idx)} className="flex justify-between items-center p-3 hover:bg-gray-50 active:bg-gray-100 cursor-pointer transition-colors">
                              <div className="flex items-center gap-3">
-                                 <span className="w-6 h-6 flex items-center justify-center bg-primary text-white text-xs font-bold rounded-full">{idx + 1}</span>
+                                 <span className="w-6 h-6 flex items-center justify-center bg-primary text-white text-[10px] font-bold rounded-full">{idx + 1}</span>
                                  <span className="font-semibold text-gray-800">{s.club}</span>
                              </div>
                              <div className="flex items-center gap-2">
@@ -161,7 +165,6 @@ export const PlayHole: React.FC = () => {
              )}
           </div>
 
-          {/* Club Grid */}
           <div className="grid grid-cols-3 gap-2">
               {state.myBag.filter(c => c !== 'Putter').map(club => (
                   <button 
@@ -173,7 +176,6 @@ export const PlayHole: React.FC = () => {
                   </button>
               ))}
               
-              {/* Special Buttons */}
               <button 
                 onClick={() => handleClubClick('Penalty')}
                 className="bg-red-50 text-red-600 border border-red-100 py-3 rounded-lg font-bold shadow-sm active:scale-95 transition-all text-sm"
@@ -190,7 +192,7 @@ export const PlayHole: React.FC = () => {
       </div>
 
       {/* Sticky Bottom Action */}
-      <div className="fixed bottom-0 left-0 right-0 px-4 pt-4 pb-safe-bottom bg-white border-t z-20">
+      <div className="fixed bottom-0 left-0 right-0 px-4 pt-4 pb-safe-bottom bg-white border-t z-20 shadow-2xl">
           <div className="flex gap-3">
               <button 
                  onClick={() => dispatch({type: 'DELETE_SHOT', payload: state.currentShots.length - 1})}
@@ -225,7 +227,6 @@ export const PlayHole: React.FC = () => {
                       </button>
                   </div>
 
-                  {/* Club Selection Dropdown */}
                   <div className="mb-6">
                       <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">{t('clubUsed')}</label>
                       <div className="relative">
@@ -234,7 +235,6 @@ export const PlayHole: React.FC = () => {
                             onChange={(e) => setEditFormClub(e.target.value)}
                             className="w-full appearance-none bg-gray-50 border border-gray-200 text-gray-900 text-lg font-bold rounded-xl py-3 px-4 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                           >
-                              {/* Combine current bag + Penalty + Putter for options */}
                               {[...state.myBag, 'Penalty'].filter((v, i, a) => a.indexOf(v) === i).map(c => (
                                   <option key={c} value={c}>{c}</option>
                               ))}
@@ -245,7 +245,6 @@ export const PlayHole: React.FC = () => {
                       </div>
                   </div>
                   
-                  {/* Distance Input */}
                   <div className="mb-8">
                       <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">{t('distance')}</label>
                       <input 
@@ -276,6 +275,29 @@ export const PlayHole: React.FC = () => {
                   </div>
               </div>
           </div>
+      )}
+
+      {/* --- Par Selection Modal --- */}
+      {showParModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-6 animate-fade-in">
+          <div className="bg-white w-full max-w-xs rounded-2xl p-6 shadow-2xl">
+             <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-bold text-gray-900">{t('changePar')}</h3>
+                <button onClick={() => setShowParModal(false)} className="text-gray-400"><X size={20}/></button>
+             </div>
+             <div className="grid grid-cols-1 gap-3">
+                {[3, 4, 5].map(p => (
+                  <button 
+                    key={p} 
+                    onClick={() => changePar(p)}
+                    className={`py-4 rounded-xl font-black text-xl border-2 transition-all ${state.currentPar === p ? 'border-primary bg-green-50 text-primary' : 'border-gray-100 text-gray-400'}`}
+                  >
+                    Par {p}
+                  </button>
+                ))}
+             </div>
+          </div>
+        </div>
       )}
     </div>
   );

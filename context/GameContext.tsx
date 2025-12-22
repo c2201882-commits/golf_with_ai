@@ -7,13 +7,14 @@ type Action =
   | { type: 'LOAD_STATE'; payload: GameState }
   | { type: 'SET_BAG'; payload: ClubName[] }
   | { type: 'SET_VIEW'; payload: ViewState }
-  | { type: 'SET_LANGUAGE'; payload: Language } // Added
+  | { type: 'SET_LANGUAGE'; payload: Language } 
   | { type: 'SET_USER_NAME'; payload: string }
   | { type: 'SET_HOME_BACKGROUND'; payload: string | null }
   | { type: 'START_HOLE'; payload: { hole: number; par: number } }
+  | { type: 'SET_CURRENT_PAR'; payload: number }
   | { type: 'ADD_SHOT'; payload: Shot }
   | { type: 'UPDATE_SHOT'; payload: { index: number; shot: Shot } }
-  | { type: 'DELETE_SHOT'; payload: number } // Index
+  | { type: 'DELETE_SHOT'; payload: number } 
   | { type: 'FINISH_HOLE'; payload: RoundHoleData }
   | { type: 'EDIT_HOLE'; payload: { index: number; data: RoundHoleData } }
   | { type: 'ARCHIVE_ROUND'; payload: { courseName: string; date: string } }
@@ -25,7 +26,7 @@ type Action =
 // --- Initial State ---
 const initialState: GameState = {
   view: 'HOME',
-  language: 'zh-TW', // Default to Chinese
+  language: 'zh-TW', 
   myBag: ["Driver", "Hybrid", "7 Iron", "8 Iron", "9 Iron", "PW", "SW", "Putter"],
   userName: "Golfer",
   homeBackgroundImage: null,
@@ -43,14 +44,13 @@ const initialState: GameState = {
 const gameReducer = (state: GameState, action: Action): GameState => {
   switch (action.type) {
     case 'LOAD_STATE': {
-      // Data hygiene: Ensure pastRounds is always an array
       const safePastRounds = Array.isArray(action.payload.pastRounds) ? action.payload.pastRounds : [];
       return { 
         ...initialState, 
         ...action.payload,
         homeBackgroundImage: action.payload.homeBackgroundImage || null,
         pastRounds: safePastRounds,
-        language: action.payload.language || 'zh-TW' // Fallback
+        language: action.payload.language || 'zh-TW' 
       };
     }
     case 'SET_BAG':
@@ -72,6 +72,8 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         view: 'PLAY',
         isEditingMode: false,
       };
+    case 'SET_CURRENT_PAR':
+      return { ...state, currentPar: action.payload };
     case 'ADD_SHOT':
       return { ...state, currentShots: [...state.currentShots, action.payload] };
     case 'UPDATE_SHOT': {
@@ -133,7 +135,6 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         totalPutts
       };
 
-      // Explicitly reset game state while keeping user prefs and adding new round
       return {
         ...state,
         currentHole: 1,
@@ -143,7 +144,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         isEditingMode: false,
         editingHoleIndex: -1,
         maxHoleReached: 1,
-        pastRounds: [newRound, ...state.pastRounds], // Add to TOP of list
+        pastRounds: [newRound, ...state.pastRounds], 
         view: 'PAST_GAMES' 
       };
     }
@@ -160,7 +161,6 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         view: 'HOLE_SETUP',
       };
     case 'RESET_GAME':
-      // Explicitly clearing data fields ensures "Discard" works as expected
       return { 
         ...state,
         view: 'HOME',
@@ -171,7 +171,6 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         isEditingMode: false,
         editingHoleIndex: -1,
         maxHoleReached: 1,
-        // Preserve these:
         language: state.language,
         myBag: state.myBag, 
         userName: state.userName, 
@@ -195,7 +194,6 @@ const gameReducer = (state: GameState, action: Action): GameState => {
   }
 };
 
-// --- Context ---
 interface GameContextProps {
   state: GameState;
   dispatch: React.Dispatch<Action>;

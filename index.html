@@ -49,6 +49,21 @@
       }
     </script>
     <style>
+      /* --- Native App Resets --- */
+      * {
+        /* Disable text selection (feels like native app) */
+        -webkit-user-select: none;
+        user-select: none;
+        /* Disable long-press context menu (like 'Save Image') */
+        -webkit-touch-callout: none;
+      }
+      
+      /* Re-enable selection for inputs so users can type */
+      input, textarea {
+        -webkit-user-select: text;
+        user-select: text;
+      }
+
       /* Hide scrollbar for Chrome, Safari and Opera */
       .no-scrollbar::-webkit-scrollbar {
         display: none;
@@ -58,13 +73,16 @@
         -ms-overflow-style: none;  /* IE and Edge */
         scrollbar-width: none;  /* Firefox */
       }
+      
       body {
-        overscroll-behavior-y: none; /* Prevent pull-to-refresh on mobile */
+        /* Prevent rubber-band scrolling on the whole body */
+        overscroll-behavior-y: none;
+        /* Remove tap highlight color */
         -webkit-tap-highlight-color: transparent;
+        background-color: #f3f4f6; /* Match bg-gray-50 */
       }
 
       /* --- Safe Area Utilities --- */
-      /* Added generous padding to prevent iPhone bottom blocking */
       
       .pt-safe-top {
         padding-top: 1rem; /* Fallback */
@@ -72,7 +90,7 @@
       }
 
       .pb-safe-bottom {
-        padding-bottom: 2rem; /* INCREASED Fallback to 32px */
+        padding-bottom: 2rem; 
         padding-bottom: calc(2rem + env(safe-area-inset-bottom));
       }
     </style>
@@ -85,7 +103,8 @@
     "react-dom/": "https://esm.sh/react-dom@^19.2.1/",
     "@google/genai": "https://esm.sh/@google/genai@^1.33.0",
     "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
-    "vite": "https://esm.sh/vite@^7.3.0"
+    "vite": "https://esm.sh/vite@^7.3.0",
+    "html-to-image": "https://esm.sh/html-to-image@1.11.11"
   }
 }
 </script>
