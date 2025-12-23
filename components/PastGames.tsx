@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useGame } from '../context/GameContext';
-import { FinishedRound } from '../types';
+import { FinishedRound, RoundHoleData } from '../types';
 import { ChevronDown, ChevronUp, Calendar, User, BarChart, X, Trash2, Sparkles, Bot, Loader2, Trophy, Heart, ShieldAlert, Copy, Check, Download, Image as ImageIcon } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import { toPng } from 'html-to-image';
@@ -21,7 +21,8 @@ export const PastGames: React.FC = () => {
   const [copying, setCopying] = useState(false);
 
   // Refs for image export
-  const roundCardRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const exportRef = useRef<HTMLDivElement>(null);
+  const [exportingRound, setExportingRound] = useState<FinishedRound | null>(null);
 
   const toggleExpand = (index: number) => {
     setExpandedIndex(expandedIndex === index ? null : index);
@@ -62,32 +63,67 @@ export const PastGames: React.FC = () => {
       };
   };
 
-  // Helper to render traditional symbols
-  const renderTraditionalScore = (score: number, par: number) => {
+  // Helper to render traditional symbols based on the legend: Circles for under par, Squares for over par
+  const renderTraditionalScore = (score: number, par: number, forceColor?: string) => {
     const diff = score - par;
-    const baseClass = "inline-flex items-center justify-center w-8 h-8 font-black text-xs relative";
+    const baseClass = `inline-flex items-center justify-center w-7 h-7 font-black text-xs relative ${forceColor || 'text-gray-900'}`;
+    const borderStyle = { borderColor: forceColor || '#d1d5db' };
     
-    if (diff === 1) { // Bogey -> Single Circle
-      return <span className={`${baseClass} border-2 border-red-400 rounded-full text-red-500`}>{score}</span>;
-    } else if (diff >= 2) { // Double Bogey+ -> Double Circle
-      return (
-        <span className={`${baseClass} border-2 border-red-500 rounded-full text-red-600`}>
-           <span className="absolute inset-0.5 border border-red-500 rounded-full"></span>
-           {score}
-        </span>
-      );
-    } else if (diff === -1) { // Birdie -> Single Square
-      return <span className={`${baseClass} border-2 border-blue-400 text-blue-500`}>{score}</span>;
-    } else if (diff <= -2) { // Eagle+ -> Double Square
-      return (
-        <span className={`${baseClass} border-2 border-blue-600 text-blue-700`}>
-           <span className="absolute inset-0.5 border border-blue-600"></span>
-           {score}
-        </span>
-      );
+    if (diff === 0) {
+        return <span className={baseClass}>{score}</span>;
+    } else if (diff === -1) {
+        return <span className={`${baseClass} border rounded-full`} style={borderStyle}>{score}</span>;
+    } else if (diff <= -2) {
+        return (
+            <span className={`${baseClass} border rounded-full`} style={borderStyle}>
+                <span className={`absolute inset-[1px] border rounded-full`} style={borderStyle}></span>
+                {score}
+            </span>
+        );
+    } else if (diff === 1) {
+        return <span className={`${baseClass} border`} style={borderStyle}>{score}</span>;
+    } else if (diff === 2) {
+        return (
+            <span className={`${baseClass} border`} style={borderStyle}>
+                <span className={`absolute inset-[1px] border`} style={borderStyle}></span>
+                {score}
+            </span>
+        );
+    } else if (diff >= 3) {
+        return (
+            <span className={`${baseClass} text-white z-10 font-black`}>
+                <svg className="absolute inset-0 w-full h-full -z-10 text-red-500 scale-110" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2L14.4 5.6H18.4L18.4 9.6L22 12L18.4 14.4V18.4H14.4L12 22L9.6 18.4H5.6V14.4L2 12L5.6 9.6V5.6H9.6L12 2Z" />
+                </svg>
+                {score}
+            </span>
+        );
     }
     
-    return <span className={`${baseClass} text-gray-900`}>{score}</span>; // Par
+    return <span className={baseClass}>{score}</span>;
+  };
+
+  const handleExportImage = async (round: FinishedRound) => {
+    setExportingRound(round);
+    setTimeout(async () => {
+        if (exportRef.current) {
+            try {
+                const dataUrl = await toPng(exportRef.current, { 
+                    quality: 1,
+                    pixelRatio: 4, 
+                    backgroundColor: '#ffffff'
+                });
+                const link = document.createElement('a');
+                link.download = `Scorecard-${round.courseName}-${round.date}.png`;
+                link.href = dataUrl;
+                link.click();
+            } catch (err) {
+                console.error('Export failed', err);
+            } finally {
+                setExportingRound(null);
+            }
+        }
+    }, 150);
   };
 
   const startAnalysis = (round: FinishedRound) => {
@@ -99,65 +135,18 @@ export const PastGames: React.FC = () => {
   const handleRunAnalysis = async () => {
     if (!currentAnalyzingRound) return;
     setIsAnalyzing(true);
-    setAnalysisResult(null);
-
     try {
       const apiKey = process.env.API_KEY;
       const round = currentAnalyzingRound;
-
-      const scoreDiff = round.totalScore - round.totalPar;
-      const scoreString = scoreDiff > 0 ? `+${scoreDiff}` : scoreDiff === 0 ? 'Even' : `${scoreDiff}`;
-      const { stats: clubStats } = getClubStats(round);
-      
-      const holesSummary = round.holes.map(h => 
-        `Hole ${h.holeNumber} (Par ${h.par}): Score ${h.score}, Putts ${h.putts}, GIR: ${h.gir ? 'Yes' : 'No'}`
-      ).join('\n');
-
-      const clubSummary = clubStats.map(([club, count]) => `${club}: ${count}`).join(', ');
-
-      const languageInstruction = state.language === 'zh-TW' 
-          ? "Please reply in Traditional Chinese (Taiwanese Mandarin)." 
-          : "Please reply in English.";
-
-      const toneInstruction = analysisMode === 'gentle'
-        ? "Tone: Be very encouraging, soft, and positive. Act like a supportive friend. Focus on the bright side and frame improvements as exciting new opportunities."
-        : "Tone: Be strict, direct, and highly critical. Act like a tough professional PGA drill sergeant coach. Do not sugarcoat failures. Focus on technical flaws and high expectations for perfection.";
-
-      const prompt = `
-        Act as a professional PGA golf coach. Analyze the following round for a player named ${round.playerName}.
-        ${languageInstruction}
-        ${toneInstruction}
-
-        **Round Summary:**
-        - Course: ${round.courseName}
-        - Total Score: ${round.totalScore} (${scoreString})
-        - Total Par: ${round.totalPar}
-        - Total Putts: ${round.totalPutts}
-        
-        **Club Usage:**
-        ${clubSummary}
-
-        **Hole-by-Hole Detail:**
-        ${holesSummary}
-
-        **Instructions:**
-        1. Give a summary of the round according to your assigned tone.
-        2. Identify 2-3 key areas for improvement.
-        3. Suggest 1 specific drill to practice.
-        4. Keep the response concise (under 250 words).
-      `;
-
+      const prompt = `Act as a PGA coach. Analyze round: ${round.courseName}, Score: ${round.totalScore}. Lang: ${state.language}. Max 200 words.`;
       const ai = new GoogleGenAI({ apiKey: apiKey || '' });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
       });
-
       setAnalysisResult(response.text || "Could not generate analysis.");
-
     } catch (error: any) {
-      console.error("AI Analysis Error:", error);
-      setAnalysisResult(`Error: ${error.message}. Please check your connection and API Key.`);
+      setAnalysisResult(`Error: ${error.message}`);
     } finally {
       setIsAnalyzing(false);
     }
@@ -168,35 +157,6 @@ export const PastGames: React.FC = () => {
     setAnalysisResult(null);
     setCurrentAnalyzingRound(null);
     setIsAnalyzing(false);
-  };
-
-  const handleCopyAnalysis = () => {
-    if (analysisResult) {
-      navigator.clipboard.writeText(analysisResult);
-      setCopying(true);
-      setTimeout(() => setCopying(false), 2000);
-    }
-  };
-
-  const handleExportImage = async (index: number) => {
-    const cardElement = roundCardRefs.current[index];
-    if (cardElement) {
-        try {
-            const dataUrl = await toPng(cardElement, { 
-                backgroundColor: '#f3f4f6',
-                style: {
-                    borderRadius: '0'
-                }
-            });
-            const link = document.createElement('a');
-            link.download = `golf-scorecard-${Date.now()}.png`;
-            link.href = dataUrl;
-            link.click();
-        } catch (err) {
-            console.error('Failed to export image', err);
-            alert('Export failed. Please try again.');
-        }
-    }
   };
 
   if (state.pastRounds.length === 0) {
@@ -220,27 +180,14 @@ export const PastGames: React.FC = () => {
       
       <div className="space-y-4">
         {state.pastRounds.map((round, index) => {
-          const { stats: clubStats, totalShots } = getClubStats(round);
-          const maxUsage = clubStats.length > 0 ? clubStats[0][1] : 0;
           const key = round.id || index;
-
           return (
-            <div 
-                key={key} 
-                ref={el => roundCardRefs.current[index] = el}
-                className="relative bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all group"
-            >
-                <button
-                    onClick={(e) => handleDelete(e, index)}
-                    className="absolute top-0 right-0 p-3 z-20 text-gray-400 hover:text-white hover:bg-red-500 rounded-bl-2xl transition-all cursor-pointer"
-                >
+            <div key={key} className="relative bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all group">
+                <button onClick={(e) => handleDelete(e, index)} className="absolute top-0 right-0 p-3 z-20 text-gray-400 hover:text-white hover:bg-red-500 rounded-bl-2xl transition-all">
                     <X size={20} />
                 </button>
 
-                <div 
-                    onClick={() => toggleExpand(index)}
-                    className="p-5 cursor-pointer hover:bg-gray-50 active:bg-gray-100 transition-colors pr-12"
-                >
+                <div onClick={() => toggleExpand(index)} className="p-5 cursor-pointer hover:bg-gray-50 transition-colors pr-12">
                     <div className="flex justify-between items-start mb-3">
                         <div>
                             <h3 className="text-lg font-bold text-gray-800 pr-2">{round.courseName || t('unknownCourse')}</h3>
@@ -259,87 +206,25 @@ export const PastGames: React.FC = () => {
                             </div>
                         </div>
                     </div>
-                    <div className="flex justify-center -mb-2">
-                        {expandedIndex === index ? <ChevronUp size={16} className="text-gray-300" /> : <ChevronDown size={16} className="text-gray-300" />}
-                    </div>
                 </div>
 
                 {expandedIndex === index && (
                     <div className="border-t border-gray-100 bg-gray-50 animate-fade-in pb-4">
-                        {/* Action Buttons: AI & Export */}
-                        <div className="p-4 bg-gradient-to-r from-indigo-50 to-purple-50 border-b border-indigo-100 flex flex-col gap-2">
-                            <div className="flex items-center justify-between mb-1">
-                                <div className="flex items-center gap-2">
-                                    <Bot size={20} className="text-indigo-600" />
-                                    <span className="text-xs font-bold text-indigo-800">{t('getProInsights')}</span>
-                                </div>
-                                <div className="flex gap-2">
-                                    <button 
-                                        onClick={() => handleExportImage(index)}
-                                        className="flex items-center gap-2 bg-white text-gray-700 px-3 py-2 rounded-xl text-[10px] font-bold shadow-sm border border-gray-100 active:scale-95 transition-all"
-                                    >
-                                        <ImageIcon size={14} className="text-gray-400" /> {t('exportImage')}
-                                    </button>
-                                    <button 
-                                        onClick={() => startAnalysis(round)}
-                                        className="flex items-center gap-2 bg-indigo-600 text-white px-3 py-2 rounded-xl text-[10px] font-bold shadow-md hover:bg-indigo-700 active:scale-95 transition-all"
-                                    >
-                                        <Sparkles size={14} /> {t('analyzeRound')}
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-2 p-4 text-center border-b border-gray-200">
-                            <div>
-                                <div className="text-[10px] uppercase text-gray-400 font-bold">{t('holes')}</div>
-                                <div className="font-bold">{round.holes.length}</div>
-                            </div>
-                            <div>
-                                <div className="text-[10px] uppercase text-gray-400 font-bold">{t('putts')}</div>
-                                <div className="font-bold">{round.totalPutts}</div>
-                            </div>
-                            <div>
-                                <div className="text-[10px] uppercase text-gray-400 font-bold">{t('par')}</div>
-                                <div className="font-bold">{round.totalPar}</div>
-                            </div>
-                        </div>
-
-                        <div className="p-5 border-b border-gray-200 bg-white">
-                             <div className="flex items-center justify-between mb-4">
-                                <div className="flex items-center gap-2 text-gray-800 font-bold text-sm">
-                                    <BarChart size={16} className="text-primary"/>
-                                    {t('clubUsage')}
-                                </div>
-                                <div className="text-xs text-gray-400">{t('totalShots')}: {totalShots}</div>
-                             </div>
-                             {clubStats.length > 0 ? (
-                                 <div className="space-y-3">
-                                     {clubStats.map(([club, count]) => {
-                                         const barWidth = maxUsage > 0 ? (count / maxUsage) * 100 : 0;
-                                         return (
-                                             <div key={club} className="flex items-center gap-3 text-xs">
-                                                 <div className="w-16 font-medium text-gray-600 truncate text-right">{club}</div>
-                                                 <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                                                     <div className="h-full bg-primary rounded-full" style={{ width: `${barWidth}%` }}></div>
-                                                 </div>
-                                                 <div className="w-6 font-bold text-gray-800 text-right">{count}</div>
-                                             </div>
-                                         );
-                                     })}
-                                 </div>
-                             ) : (
-                                 <div className="text-center text-gray-400 text-xs py-2">No shots recorded</div>
-                             )}
+                        <div className="p-4 flex gap-2">
+                            <button onClick={() => handleExportImage(round)} className="flex-1 flex items-center justify-center gap-2 bg-white text-gray-700 py-3 rounded-xl text-sm font-bold shadow-sm border border-gray-100 active:scale-95 transition-all">
+                                <ImageIcon size={18} className="text-blue-500" /> {t('exportImage')}
+                            </button>
+                            <button onClick={() => startAnalysis(round)} className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 text-white py-3 rounded-xl text-sm font-bold shadow-md active:scale-95 transition-all">
+                                <Sparkles size={18} /> {t('analyzeRound')}
+                            </button>
                         </div>
 
                         <div className="p-2">
-                            <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-3 py-2">{t('shotDetail')}</div>
                             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                                 <table className="w-full text-xs">
                                     <thead className="bg-gray-100 text-gray-500 font-bold">
                                         <tr>
-                                            <th className="py-3 text-center w-10">{t('hole')}</th>
+                                            <th className="py-3 text-center">{t('hole')}</th>
                                             <th className="py-3 text-center">{t('par')}</th>
                                             <th className="py-3 text-center">{t('score')}</th>
                                             <th className="py-3 text-center">{t('putts')}</th>
@@ -347,42 +232,17 @@ export const PastGames: React.FC = () => {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
-                                        {round.holes.map((h, hIdx) => {
-                                            const holeKey = `${index}-${hIdx}`;
-                                            const isHoleExpanded = expandedHoleIndex === holeKey;
-                                            return (
-                                                <React.Fragment key={holeKey}>
-                                                    <tr onClick={() => toggleHoleExpand(index, hIdx)} className={`active:bg-gray-50 transition-colors cursor-pointer ${isHoleExpanded ? 'bg-green-50/30' : ''}`}>
-                                                        <td className="py-3 text-center font-bold text-gray-500">{h.holeNumber}</td>
-                                                        <td className="py-3 text-center text-gray-400">{h.par}</td>
-                                                        <td className="py-3 text-center">
-                                                            {renderTraditionalScore(h.score, h.par)}
-                                                        </td>
-                                                        <td className="py-3 text-center text-gray-500">{h.putts}</td>
-                                                        <td className="py-3 text-center text-gray-300">
-                                                            {isHoleExpanded ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
-                                                        </td>
-                                                    </tr>
-                                                    {isHoleExpanded && (
-                                                        <tr className="bg-white border-l-2 border-primary">
-                                                            <td colSpan={5} className="p-3">
-                                                                <div className="space-y-2">
-                                                                    {h.shots.length > 0 ? h.shots.map((s, sIdx) => (
-                                                                        <div key={s.id} className="flex items-center justify-between text-[11px] border-b border-gray-50 pb-1 last:border-0">
-                                                                            <div className="flex items-center gap-2">
-                                                                                <span className="w-4 h-4 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center font-bold text-[9px]">{sIdx + 1}</span>
-                                                                                <span className="font-bold text-gray-700">{s.club}</span>
-                                                                            </div>
-                                                                            <span className="text-primary font-medium">{s.distance ? `${s.distance}y` : ''}</span>
-                                                                        </div>
-                                                                    )) : <div className="text-center text-gray-300 py-1 italic">No shot data</div>}
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                    )}
-                                                </React.Fragment>
-                                            );
-                                        })}
+                                        {round.holes.map((h, hIdx) => (
+                                            <tr key={hIdx} onClick={() => toggleHoleExpand(index, hIdx)} className="cursor-pointer active:bg-gray-50">
+                                                <td className="py-3 text-center font-bold text-gray-500">{h.holeNumber}</td>
+                                                <td className="py-3 text-center text-gray-400">{h.par}</td>
+                                                <td className="py-3 text-center">{renderTraditionalScore(h.score, h.par)}</td>
+                                                <td className="py-3 text-center text-gray-500">{h.putts}</td>
+                                                <td className="py-3 text-center text-gray-300">
+                                                    {expandedHoleIndex === `${index}-${hIdx}` ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
+                                                </td>
+                                            </tr>
+                                        ))}
                                     </tbody>
                                 </table>
                             </div>
@@ -395,105 +255,148 @@ export const PastGames: React.FC = () => {
       </div>
 
       <div className="mt-8 text-center pb-8">
-          <button onClick={handleClearAll} className="inline-flex items-center gap-2 text-xs text-red-400 hover:text-red-600 font-bold border border-red-100 hover:border-red-300 px-4 py-2 rounded-lg transition-colors">
+          <button onClick={handleClearAll} className="inline-flex items-center gap-2 text-xs text-red-400 hover:text-red-600 font-bold border border-red-100 px-4 py-2 rounded-lg">
               <Trash2 size={14} /> {t('clearHistory')}
           </button>
       </div>
+
+      {/* --- EXPORT TEMPLATE (Horizontal 18-Hole Layout) --- */}
+      {exportingRound && (
+        <div className="fixed top-[-9999px] left-[-9999px]">
+            <div 
+                ref={exportRef} 
+                className="w-[1000px] bg-[#f8fafc] p-10 flex flex-col font-sans text-[#1e3a8a]"
+            >
+                {/* Header Info */}
+                <div className="flex justify-between items-end mb-6 border-b-2 border-[#1e3a8a] pb-4">
+                    <div>
+                        <h1 className="text-4xl font-black tracking-tighter uppercase">{exportingRound.courseName}</h1>
+                        <p className="text-xl font-bold opacity-60 mt-1">{exportingRound.date}</p>
+                    </div>
+                    <div className="text-right">
+                        <div className="text-sm font-black uppercase tracking-widest opacity-40">Scorecard Player</div>
+                        <div className="text-3xl font-black">{exportingRound.playerName.toUpperCase()}</div>
+                    </div>
+                </div>
+
+                <div className="flex gap-10">
+                    {/* Front 9 (1-9) */}
+                    <div className="flex-1 border-4 border-[#1e3a8a]">
+                        <div className="grid grid-cols-[100px_repeat(9,1fr)] items-center text-center border-b-2 border-[#1e3a8a] bg-[#eff6ff]">
+                            <div className="py-4 font-black border-r-2 border-[#1e3a8a]">HOLE</div>
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
+                                <div key={num} className="py-4 font-black border-r border-[#1e3a8a] last:border-r-0">{num}</div>
+                            ))}
+                        </div>
+                        <div className="grid grid-cols-[100px_repeat(9,1fr)] items-center text-center border-b-2 border-[#1e3a8a]">
+                            <div className="py-4 font-bold border-r-2 border-[#1e3a8a] bg-white">PAR</div>
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => {
+                                const hole = exportingRound.holes.find(h => h.holeNumber === num);
+                                return <div key={num} className="py-4 font-bold border-r border-[#1e3a8a] last:border-r-0 opacity-60 italic">{hole?.par || '-'}</div>;
+                            })}
+                        </div>
+                        <div className="grid grid-cols-[100px_repeat(9,1fr)] items-center text-center bg-white relative">
+                            <div className="absolute left-0 h-full w-[100px] flex items-center justify-center font-black text-[10px] uppercase tracking-widest text-[#1e3a8a] [writing-mode:vertical-lr] border-r-2 border-[#1e3a8a] bg-[#eff6ff] leading-none py-1">
+                                {exportingRound.playerName.slice(0, 10)}
+                            </div>
+                            <div className="invisible py-6">H</div> {/* Spacer for height */}
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => {
+                                const hole = exportingRound.holes.find(h => h.holeNumber === num);
+                                return (
+                                    <div key={num} className="flex justify-center items-center py-4 border-r border-[#1e3a8a] last:border-r-0 h-full">
+                                        {hole ? renderTraditionalScore(hole.score, hole.par, '#1e3a8a') : '-'}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* Back 9 (10-18) + Total */}
+                    <div className="flex-1 border-4 border-[#1e3a8a]">
+                        <div className="grid grid-cols-[100px_repeat(9,1fr)_100px] items-center text-center border-b-2 border-[#1e3a8a] bg-[#eff6ff]">
+                            <div className="py-4 font-black border-r-2 border-[#1e3a8a]">HOLE</div>
+                            {[10, 11, 12, 13, 14, 15, 16, 17, 18].map(num => (
+                                <div key={num} className="py-4 font-black border-r border-[#1e3a8a]">{num}</div>
+                            ))}
+                            <div className="py-4 font-black bg-[#1e3a8a] text-white">TOTAL</div>
+                        </div>
+                        <div className="grid grid-cols-[100px_repeat(9,1fr)_100px] items-center text-center border-b-2 border-[#1e3a8a]">
+                            <div className="py-4 font-bold border-r-2 border-[#1e3a8a] bg-white">PAR</div>
+                            {[10, 11, 12, 13, 14, 15, 16, 17, 18].map(num => {
+                                const hole = exportingRound.holes.find(h => h.holeNumber === num);
+                                return <div key={num} className="py-4 font-bold border-r border-[#1e3a8a] opacity-60 italic">{hole?.par || '-'}</div>;
+                            })}
+                            <div className="py-4 font-black bg-[#eff6ff]">{exportingRound.totalPar}</div>
+                        </div>
+                        <div className="grid grid-cols-[100px_repeat(9,1fr)_100px] items-center text-center bg-white relative">
+                             <div className="absolute left-0 h-full w-[100px] flex items-center justify-center font-black text-[10px] uppercase tracking-widest text-[#1e3a8a] [writing-mode:vertical-lr] border-r-2 border-[#1e3a8a] bg-[#eff6ff] leading-none py-1">
+                                {exportingRound.playerName.slice(0, 10)}
+                            </div>
+                            <div className="invisible py-6">H</div>
+                            {[10, 11, 12, 13, 14, 15, 16, 17, 18].map(num => {
+                                const hole = exportingRound.holes.find(h => h.holeNumber === num);
+                                return (
+                                    <div key={num} className="flex justify-center items-center py-4 border-r border-[#1e3a8a] h-full">
+                                        {hole ? renderTraditionalScore(hole.score, hole.par, '#1e3a8a') : '-'}
+                                    </div>
+                                );
+                            })}
+                            <div className="py-4 font-black text-2xl bg-[#eff6ff] h-full flex items-center justify-center">{exportingRound.totalScore}</div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Footer Credits */}
+                <div className="mt-8 text-sm flex justify-between items-center opacity-30 font-bold italic">
+                    <span>Generated by GOLF MASTER PRO PWA</span>
+                    <span>★ ★ ★ ★ ★</span>
+                    <span>Verified Professional Scorecard</span>
+                </div>
+            </div>
+        </div>
+      )}
 
       {/* --- AI Analysis Modal --- */}
       {showAnalysisModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
             <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
-                <div className={`p-4 text-white flex justify-between items-center shrink-0 transition-colors ${analysisMode === 'gentle' ? 'bg-indigo-600' : 'bg-gray-900'}`}>
+                <div className={`p-4 text-white flex justify-between items-center transition-colors ${analysisMode === 'gentle' ? 'bg-indigo-600' : 'bg-gray-900'}`}>
                     <div className="flex items-center gap-2 font-bold text-lg">
                         {analysisMode === 'gentle' ? <Heart size={20} className="text-pink-300" /> : <ShieldAlert size={20} className="text-orange-400" />}
                         {t('aiCoach')}
                     </div>
-                    <button onClick={closeAnalysisModal} className="p-1 hover:bg-white/20 rounded-full">
-                        <X size={20} />
-                    </button>
+                    <button onClick={closeAnalysisModal} className="p-1 hover:bg-white/20 rounded-full"><X size={20} /></button>
                 </div>
-                
                 <div className="p-6 overflow-y-auto bg-white">
-                    {/* Mode Selector */}
-                    {!analysisResult && !isAnalyzing && (
-                      <div className="mb-6">
-                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">{t('analysisMode')}</label>
-                        <div className="flex bg-gray-100 p-1 rounded-xl">
-                          <button 
-                            onClick={() => setAnalysisMode('gentle')}
-                            className={`flex-1 py-3 rounded-lg flex items-center justify-center gap-2 text-sm font-bold transition-all ${analysisMode === 'gentle' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'}`}
-                          >
-                            <Heart size={16} /> {t('gentleMode')}
-                          </button>
-                          <button 
-                            onClick={() => setAnalysisMode('strict')}
-                            className={`flex-1 py-3 rounded-lg flex items-center justify-center gap-2 text-sm font-bold transition-all ${analysisMode === 'strict' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400'}`}
-                          >
-                            <ShieldAlert size={16} /> {t('strictMode')}
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
                     {isAnalyzing ? (
                         <div className="flex flex-col items-center justify-center py-10 space-y-4">
-                            <Loader2 size={48} className={`${analysisMode === 'gentle' ? 'text-indigo-600' : 'text-gray-900'} animate-spin`} />
-                            <div className="text-center">
-                                <h3 className="text-lg font-bold text-gray-800">{t('analyzing')}</h3>
-                                <p className="text-xs text-gray-400 mt-1">{analysisMode === 'gentle' ? 'Preparing something sweet...' : 'Calibrating expectations...'}</p>
-                            </div>
+                            <Loader2 size={48} className="text-indigo-600 animate-spin" />
+                            <h3 className="text-lg font-bold text-gray-800">{t('analyzing')}</h3>
                         </div>
                     ) : analysisResult ? (
                         <div className="prose prose-sm max-w-none">
-                            <div className={`whitespace-pre-wrap leading-relaxed font-medium ${analysisMode === 'gentle' ? 'text-gray-700' : 'text-gray-900'}`}>
-                                {analysisResult}
-                            </div>
-                            <div className="mt-8 pt-4 border-t border-gray-100 text-xs text-gray-400 text-center italic">
-                                *AI suggestions are based on your {analysisMode === 'gentle' ? 'wonderful' : 'recorded'} round data.
-                            </div>
+                            <div className="whitespace-pre-wrap leading-relaxed font-medium text-gray-700">{analysisResult}</div>
                         </div>
                     ) : (
                         <div className="text-center py-6">
-                          <p className="text-gray-500 mb-8 px-4">
-                            {analysisMode === 'gentle' 
-                              ? "Select this for a supportive and encouraging analysis of your performance!" 
-                              : "Select this if you want direct, no-nonsense feedback on where you missed the mark."}
-                          </p>
-                          <button 
-                            onClick={handleRunAnalysis}
-                            className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg active:scale-95 transition-all text-white flex items-center justify-center gap-3 ${analysisMode === 'gentle' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-gray-900 hover:bg-black'}`}
-                          >
-                            <Sparkles size={20} /> {t('analyzeRound')}
-                          </button>
+                            <div className="flex bg-gray-100 p-1 rounded-xl mb-6">
+                                <button onClick={() => setAnalysisMode('gentle')} className={`flex-1 py-3 rounded-lg text-sm font-bold ${analysisMode === 'gentle' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'}`}>Gentle</button>
+                                <button onClick={() => setAnalysisMode('strict')} className={`flex-1 py-3 rounded-lg text-sm font-bold ${analysisMode === 'strict' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400'}`}>Strict</button>
+                            </div>
+                            <button onClick={handleRunAnalysis} className={`w-full py-4 rounded-xl font-bold text-white shadow-lg active:scale-95 ${analysisMode === 'gentle' ? 'bg-indigo-600' : 'bg-gray-900'}`}>
+                                <Sparkles size={20} className="inline mr-2" /> {t('analyzeRound')}
+                            </button>
                         </div>
                     )}
                 </div>
-
-                {(analysisResult || isAnalyzing) && (
-                    <div className="p-4 border-t border-gray-100 bg-gray-50 shrink-0 flex gap-2">
-                        {analysisResult && (
-                            <button 
-                                onClick={handleCopyAnalysis}
-                                className="flex-1 bg-white border border-gray-200 text-gray-700 py-3 rounded-xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-all"
-                            >
-                                {copying ? <Check size={20} className="text-green-500" /> : <Copy size={20} />}
-                                {copying ? t('copied') : t('copy')}
-                            </button>
-                        )}
-                        <button 
-                            disabled={isAnalyzing}
-                            onClick={closeAnalysisModal}
-                            className="flex-1 bg-gray-900 text-white py-3 rounded-xl font-bold hover:bg-black transition-colors disabled:opacity-50"
-                        >
-                            {t('close')}
-                        </button>
-                    </div>
-                )}
+                <div className="p-4 border-t border-gray-100 bg-gray-50 shrink-0">
+                    <button onClick={closeAnalysisModal} className="w-full bg-gray-900 text-white py-3 rounded-xl font-bold">
+                        {t('close')}
+                    </button>
+                </div>
             </div>
         </div>
       )}
-
     </div>
   );
 };

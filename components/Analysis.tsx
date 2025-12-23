@@ -61,32 +61,43 @@ export const Analysis: React.FC = () => {
       }
   };
 
-  // Helper to render traditional symbols
+  // Helper to render traditional symbols based on the provided legend image
   const renderTraditionalScore = (score: number, par: number) => {
     const diff = score - par;
-    const baseClass = "inline-flex items-center justify-center w-8 h-8 font-black text-sm relative";
+    const baseClass = "inline-flex items-center justify-center w-9 h-9 font-black text-sm relative transition-all";
     
-    if (diff === 1) { // Bogey -> Single Circle
-      return <span className={`${baseClass} border-2 border-red-400 rounded-full text-red-500`}>{score}</span>;
-    } else if (diff >= 2) { // Double Bogey+ -> Double Circle
-      return (
-        <span className={`${baseClass} border-2 border-red-500 rounded-full text-red-600`}>
-           <span className="absolute inset-0.5 border border-red-500 rounded-full"></span>
-           {score}
-        </span>
-      );
-    } else if (diff === -1) { // Birdie -> Single Square
-      return <span className={`${baseClass} border-2 border-blue-400 text-blue-500`}>{score}</span>;
-    } else if (diff <= -2) { // Eagle+ -> Double Square
-      return (
-        <span className={`${baseClass} border-2 border-blue-600 text-blue-700`}>
-           <span className="absolute inset-0.5 border border-blue-600"></span>
-           {score}
-        </span>
-      );
+    if (diff === 0) { // Par -> No Border
+        return <span className={`${baseClass} text-gray-900`}>{score}</span>;
+    } else if (diff === -1) { // Birdie -> Single Circle
+        return <span className={`${baseClass} border border-gray-400 rounded-full text-gray-900`}>{score}</span>;
+    } else if (diff <= -2) { // Eagle -> Double Circle
+        return (
+            <span className={`${baseClass} border border-gray-400 rounded-full text-gray-900`}>
+                <span className="absolute inset-[2px] border border-gray-400 rounded-full"></span>
+                {score}
+            </span>
+        );
+    } else if (diff === 1) { // Bogey -> Single Square
+        return <span className={`${baseClass} border border-gray-400 text-gray-900`}>{score}</span>;
+    } else if (diff === 2) { // Double Bogey -> Double Square
+        return (
+            <span className={`${baseClass} border border-gray-400 text-gray-900`}>
+                <span className="absolute inset-[2px] border border-gray-400"></span>
+                {score}
+            </span>
+        );
+    } else if (diff >= 3) { // Max -> Red Burst
+        return (
+            <span className={`${baseClass} text-white font-black z-10`}>
+                <svg className="absolute inset-0 w-full h-full -z-10 text-red-500 scale-110" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2L14.4 5.6H18.4L18.4 9.6L22 12L18.4 14.4V18.4H14.4L12 22L9.6 18.4H5.6V14.4L2 12L5.6 9.6V5.6H9.6L12 2Z" />
+                </svg>
+                {score}
+            </span>
+        );
     }
     
-    return <span className={`${baseClass} text-gray-900`}>{score}</span>; // Par
+    return <span className={`${baseClass}`}>{score}</span>;
   };
 
   return (
