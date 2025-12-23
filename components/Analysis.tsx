@@ -46,7 +46,6 @@ export const Analysis: React.FC = () => {
         return;
     }
     
-    // Direct save without second confirm, as filling the form is intentional enough
     dispatch({
         type: 'ARCHIVE_ROUND',
         payload: {
@@ -58,9 +57,36 @@ export const Analysis: React.FC = () => {
 
   const handleDiscardGame = () => {
       if(confirm(t('confirmDiscard'))) {
-          // This calls the enhanced RESET_GAME reducer which wipes all current game data
           dispatch({ type: 'RESET_GAME' });
       }
+  };
+
+  // Helper to render traditional symbols
+  const renderTraditionalScore = (score: number, par: number) => {
+    const diff = score - par;
+    const baseClass = "inline-flex items-center justify-center w-8 h-8 font-black text-sm relative";
+    
+    if (diff === 1) { // Bogey -> Single Circle
+      return <span className={`${baseClass} border-2 border-red-400 rounded-full text-red-500`}>{score}</span>;
+    } else if (diff >= 2) { // Double Bogey+ -> Double Circle
+      return (
+        <span className={`${baseClass} border-2 border-red-500 rounded-full text-red-600`}>
+           <span className="absolute inset-0.5 border border-red-500 rounded-full"></span>
+           {score}
+        </span>
+      );
+    } else if (diff === -1) { // Birdie -> Single Square
+      return <span className={`${baseClass} border-2 border-blue-400 text-blue-500`}>{score}</span>;
+    } else if (diff <= -2) { // Eagle+ -> Double Square
+      return (
+        <span className={`${baseClass} border-2 border-blue-600 text-blue-700`}>
+           <span className="absolute inset-0.5 border border-blue-600"></span>
+           {score}
+        </span>
+      );
+    }
+    
+    return <span className={`${baseClass} text-gray-900`}>{score}</span>; // Par
   };
 
   return (
@@ -129,8 +155,6 @@ export const Analysis: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-gray-100">
                   {state.history.map((h, idx) => {
-                      const diff = h.score - h.par;
-                      const scoreColor = diff < 0 ? 'text-blue-600' : diff > 0 ? 'text-red-500' : 'text-gray-900';
                       return (
                           <tr 
                             key={idx} 
@@ -139,7 +163,9 @@ export const Analysis: React.FC = () => {
                           >
                               <td className="py-3 px-2 text-center font-bold bg-gray-50 text-gray-600">{h.holeNumber}</td>
                               <td className="py-3 px-2 text-center text-gray-500">{h.par}</td>
-                              <td className={`py-3 px-2 text-center font-black ${scoreColor}`}>{h.score}</td>
+                              <td className="py-3 px-2 text-center">
+                                  {renderTraditionalScore(h.score, h.par)}
+                              </td>
                               <td className="py-3 px-2 text-center text-gray-600">{h.putts}</td>
                               <td className="py-3 px-2 text-center">
                                   {h.gir ? <span className="text-primary font-bold">✓</span> : <span className="text-gray-300">-</span>}

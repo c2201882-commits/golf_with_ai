@@ -62,6 +62,34 @@ export const PastGames: React.FC = () => {
       };
   };
 
+  // Helper to render traditional symbols
+  const renderTraditionalScore = (score: number, par: number) => {
+    const diff = score - par;
+    const baseClass = "inline-flex items-center justify-center w-8 h-8 font-black text-xs relative";
+    
+    if (diff === 1) { // Bogey -> Single Circle
+      return <span className={`${baseClass} border-2 border-red-400 rounded-full text-red-500`}>{score}</span>;
+    } else if (diff >= 2) { // Double Bogey+ -> Double Circle
+      return (
+        <span className={`${baseClass} border-2 border-red-500 rounded-full text-red-600`}>
+           <span className="absolute inset-0.5 border border-red-500 rounded-full"></span>
+           {score}
+        </span>
+      );
+    } else if (diff === -1) { // Birdie -> Single Square
+      return <span className={`${baseClass} border-2 border-blue-400 text-blue-500`}>{score}</span>;
+    } else if (diff <= -2) { // Eagle+ -> Double Square
+      return (
+        <span className={`${baseClass} border-2 border-blue-600 text-blue-700`}>
+           <span className="absolute inset-0.5 border border-blue-600"></span>
+           {score}
+        </span>
+      );
+    }
+    
+    return <span className={`${baseClass} text-gray-900`}>{score}</span>; // Par
+  };
+
   const startAnalysis = (round: FinishedRound) => {
     setCurrentAnalyzingRound(round);
     setShowAnalysisModal(true);
@@ -154,11 +182,10 @@ export const PastGames: React.FC = () => {
     const cardElement = roundCardRefs.current[index];
     if (cardElement) {
         try {
-            // Temporarily hide elements not desired in the image (like delete/expand icon)
             const dataUrl = await toPng(cardElement, { 
                 backgroundColor: '#f3f4f6',
                 style: {
-                    borderRadius: '0' // Ensure clean edges for capture
+                    borderRadius: '0'
                 }
             });
             const link = document.createElement('a');
@@ -321,8 +348,6 @@ export const PastGames: React.FC = () => {
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
                                         {round.holes.map((h, hIdx) => {
-                                            const diff = h.score - h.par;
-                                            const scoreColor = diff < 0 ? 'text-blue-600' : diff > 0 ? 'text-red-500' : 'text-gray-900';
                                             const holeKey = `${index}-${hIdx}`;
                                             const isHoleExpanded = expandedHoleIndex === holeKey;
                                             return (
@@ -330,7 +355,9 @@ export const PastGames: React.FC = () => {
                                                     <tr onClick={() => toggleHoleExpand(index, hIdx)} className={`active:bg-gray-50 transition-colors cursor-pointer ${isHoleExpanded ? 'bg-green-50/30' : ''}`}>
                                                         <td className="py-3 text-center font-bold text-gray-500">{h.holeNumber}</td>
                                                         <td className="py-3 text-center text-gray-400">{h.par}</td>
-                                                        <td className={`py-3 text-center font-bold ${scoreColor}`}>{h.score}</td>
+                                                        <td className="py-3 text-center">
+                                                            {renderTraditionalScore(h.score, h.par)}
+                                                        </td>
                                                         <td className="py-3 text-center text-gray-500">{h.putts}</td>
                                                         <td className="py-3 text-center text-gray-300">
                                                             {isHoleExpanded ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
