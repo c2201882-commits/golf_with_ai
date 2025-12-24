@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useGame } from '../context/GameContext';
 import { Menu, X, BarChart2, Home, User, History, Grid, Instagram, Globe, Users } from 'lucide-react';
@@ -90,7 +91,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                <div className="flex justify-between items-center">
                  <div className="flex flex-col">
                     <span className="text-lg font-bold text-gray-800 leading-tight">{state.userName}</span>
-                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{state.golferId}</span>
                  </div>
                  <button onClick={() => setIsEditingName(true)} className="text-xs text-primary underline">{t('edit')}</button>
                </div>

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useGame } from '../context/GameContext';
 import { Friend } from '../types';
-import { UserPlus, Share2, Check, Trash2, ChevronRight, X, RefreshCw, Clock, Zap, Globe, ShieldCheck, Link as LinkIcon, Copy } from 'lucide-react';
+import { UserPlus, Share2, ChevronRight, X, RefreshCw, Clock, Zap, Globe, ShieldCheck, Copy } from 'lucide-react';
 
 export const Social: React.FC = () => {
   const { state, dispatch, t } = useGame();
@@ -15,7 +15,6 @@ export const Social: React.FC = () => {
     setTimeout(() => setShowToast(null), 3000);
   };
 
-  // 穩定的 Unicode Base64
   const safeBtoa = (str: string) => {
     try {
         return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (match, p1) => String.fromCharCode(parseInt(p1, 16))));
@@ -32,7 +31,7 @@ export const Social: React.FC = () => {
     let rawInput = (manualCode || friendCodeInput).trim();
     if (!rawInput) return;
 
-    // URL 辨識
+    // 如果輸入包含網址，自動提取 code 參數
     if (rawInput.includes('code=')) {
         const urlParams = new URLSearchParams(rawInput.substring(rawInput.indexOf('?')));
         const code = urlParams.get('code');
@@ -48,6 +47,8 @@ export const Social: React.FC = () => {
         setFriendCodeInput('');
         triggerToast(t('friendAdded'));
         if (manualCode) window.history.replaceState({}, document.title, window.location.pathname);
+      } else {
+        throw new Error();
       }
     } catch (e) {
       triggerToast(t('invalidCode'), 'error');
@@ -59,27 +60,25 @@ export const Social: React.FC = () => {
     if (code) setTimeout(() => handleAddFriend(code), 500);
   }, [handleAddFriend]);
 
-  const generateMyCode = () => {
-    return safeBtoa(JSON.stringify({ id: state.golferId, name: state.userName }));
-  };
-
   const handleShareToFriend = async () => {
-    const code = generateMyCode();
-    const link = `${window.location.origin}${window.location.pathname}?code=${code}`;
+    // 關鍵優化：分享僅包含簡短代碼，避免長網址複製失敗
+    const myCode = safeBtoa(JSON.stringify({ id: state.golferId, name: state.userName }));
     
-    // 優先使用原生分享功能，若不支援則複製到剪貼簿
+    // 如果系統支援分享功能，還是可以嘗試帶網址的完整分享
     if (navigator.share) {
+      const fullLink = `${window.location.origin}${window.location.pathname}?code=${myCode}`;
       try {
         await navigator.share({ 
           title: t('shareTitle'), 
-          text: t('shareText'), 
-          url: link 
+          text: `${t('shareText')}\nCode: ${myCode}`, 
+          url: fullLink 
         });
       } catch (e) {
-        // 如果使用者取消分享，不執行任何動作
+        // 使用者取消分享
       }
     } else {
-      await navigator.clipboard.writeText(link);
+      // 若不支援分享或在某些瀏覽器環境，直接複製純代碼
+      await navigator.clipboard.writeText(myCode);
       triggerToast(t('copySuccess'));
     }
   };
@@ -100,10 +99,10 @@ export const Social: React.FC = () => {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
              </div>
-             <span className="text-[10px] font-black text-green-600 uppercase tracking-widest">Real-time P2P active</span>
+             <span className="text-[10px] font-black text-green-600 uppercase tracking-widest">Auto-Sync Enabled</span>
           </div>
         </div>
-        <button onClick={() => window.location.reload()} className="p-2 text-gray-400 bg-white rounded-xl shadow-sm border border-gray-100 active:rotate-180 transition-transform duration-500"><RefreshCw size={20}/></button>
+        <button onClick={() => window.location.reload()} className="p-2 text-gray-400 bg-white rounded-xl shadow-sm border border-gray-100"><RefreshCw size={20}/></button>
       </div>
 
       {showToast && (
@@ -112,7 +111,7 @@ export const Social: React.FC = () => {
         </div>
       )}
 
-      {/* Profile Card - Simplified */}
+      {/* Profile Card - Ultra Simplified */}
       <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden group">
         <div className="relative z-10">
             <div className="flex justify-between items-center mb-6">
@@ -132,6 +131,7 @@ export const Social: React.FC = () => {
               <Share2 size={24} /> 
               {t('copy')}
             </button>
+            <p className="mt-4 text-[10px] text-center opacity-40 font-bold uppercase tracking-widest">點擊即可複製好友代碼</p>
         </div>
         <div className="absolute -right-20 -top-20 w-64 h-64 bg-white/5 rounded-full blur-3xl"></div>
       </div>
@@ -140,7 +140,7 @@ export const Social: React.FC = () => {
       <div className="space-y-4">
           <div className="flex justify-between items-center px-2">
             <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{t('friends')} ({state.friends.length})</div>
-            <div className="text-[10px] font-bold text-indigo-500 uppercase flex items-center gap-1"><Zap size={10} className="text-yellow-400 animate-pulse" /> Auto-Sync Active</div>
+            <div className="text-[10px] font-bold text-indigo-500 uppercase flex items-center gap-1"><Zap size={10} className="text-yellow-400 animate-pulse" /> P2P Link Active</div>
           </div>
           
           {state.friends.length === 0 ? (
@@ -174,12 +174,22 @@ export const Social: React.FC = () => {
           )}
       </div>
 
-      {/* Manual Input */}
+      {/* Manual Input - Simplified */}
       <div className="bg-gray-900 rounded-[2rem] p-6 text-white shadow-xl">
           <div className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-4">{t('addFriend')}</div>
           <div className="flex flex-col gap-3">
-              <textarea value={friendCodeInput} onChange={(e) => setFriendCodeInput(e.target.value)} placeholder={t('pasteFriendCode')} className="w-full h-20 bg-white/5 border border-white/10 rounded-xl p-4 text-sm focus:outline-none focus:border-indigo-500 no-scrollbar text-white font-medium resize-none" />
-              <button onClick={() => handleAddFriend()} className="bg-indigo-500 hover:bg-indigo-400 py-4 rounded-xl font-black transition-all flex items-center justify-center gap-2"><UserPlus size={18} /> {t('addFriend')}</button>
+              <textarea 
+                value={friendCodeInput} 
+                onChange={(e) => setFriendCodeInput(e.target.value)} 
+                placeholder={t('pasteFriendCode')} 
+                className="w-full h-20 bg-white/5 border border-white/10 rounded-xl p-4 text-sm focus:outline-none focus:border-indigo-500 no-scrollbar text-white font-medium resize-none" 
+              />
+              <button 
+                onClick={() => handleAddFriend()} 
+                className="bg-indigo-500 hover:bg-indigo-400 py-4 rounded-xl font-black transition-all flex items-center justify-center gap-2"
+              >
+                <UserPlus size={18} /> {t('addFriend')}
+              </button>
           </div>
       </div>
 
@@ -191,14 +201,14 @@ export const Social: React.FC = () => {
                       <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center font-black text-2xl backdrop-blur-md border border-white/10">{viewingFriend.name.charAt(0)}</div>
                       <div>
                           <div className="font-black text-3xl tracking-tighter">{viewingFriend.name}</div>
-                          <div className="text-[10px] font-black opacity-60 uppercase tracking-widest">Live Synced {getRelativeTime(viewingFriend.lastUpdated)}</div>
+                          <div className="text-[10px] font-black opacity-60 uppercase tracking-widest">Synced {getRelativeTime(viewingFriend.lastUpdated)}</div>
                       </div>
                   </div>
                   <button onClick={() => setViewingFriend(null)} className="p-2 bg-white/10 rounded-full"><X size={28} /></button>
               </div>
               <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50/50 no-scrollbar pb-24">
                   {viewingFriend.rounds.length === 0 ? (
-                      <div className="text-center py-20 text-gray-300 font-bold italic">No records for this friend.</div>
+                      <div className="text-center py-20 text-gray-300 font-bold italic">No records found.</div>
                   ) : (
                       viewingFriend.rounds.map(round => (
                           <div key={round.id} className="bg-white rounded-[2rem] p-6 border border-gray-100 shadow-sm animate-slide-up">
