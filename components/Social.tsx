@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useGame } from '../context/GameContext';
 import { Friend } from '../types';
-import { UserPlus, Share2, Check, Trash2, Calendar, ChevronRight, X, Trophy, AlertCircle, RefreshCw, Clock, Zap, Globe, ShieldCheck } from 'lucide-react';
+import { UserPlus, Share2, Check, Trash2, Calendar, ChevronRight, X, Trophy, AlertCircle, RefreshCw, Clock, Zap, Globe, ShieldCheck, Link as LinkIcon } from 'lucide-react';
 
 export const Social: React.FC = () => {
   const { state, dispatch, t } = useGame();
@@ -16,47 +16,101 @@ export const Social: React.FC = () => {
     setTimeout(() => setShowToast(null), 3000);
   };
 
+  // 安全的 Unicode Base64 解碼
+  const safeAtob = (str: string) => {
+    try {
+      return decodeURIComponent(atob(str).split('').map(function(c) {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+    } catch (e) {
+      return null;
+    }
+  };
+
+  // 安全的 Unicode Base64 編碼
+  const safeBtoa = (str: string) => {
+    try {
+      return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, function(match, p1) {
+        return String.fromCharCode(parseInt(p1, 16));
+      }));
+    } catch (e) {
+      return "";
+    }
+  };
+
   const handleAddFriend = useCallback((manualCode?: string) => {
-    const rawInput = manualCode || friendCodeInput.trim();
+    let rawInput = (manualCode || friendCodeInput).trim();
     if (!rawInput) return;
+
+    // 如果輸入的是完整 URL，嘗試提取 code 參數
+    if (rawInput.includes('?code=')) {
+        try {
+            const url = new URL(rawInput);
+            const codeParam = url.searchParams.get('code');
+            if (codeParam) rawInput = codeParam;
+        } catch(e) {}
+    }
 
     setIsSyncing(true);
     try {
-      // 嘗試解析代碼 (Base64 或 直接 JSON)
-      let decoded;
-      try {
-        const cleaned = rawInput.replace(/[^A-Za-z0-9+/=]/g, "");
-        const decodedStr = decodeURIComponent(escape(window.atob(cleaned)));
-        decoded = JSON.parse(decodedStr);
-      } catch (e) {
-        decoded = JSON.parse(rawInput);
+      // 1. 嘗試 Base64 解碼
+      let decodedStr = safeAtob(rawInput.replace(/[^A-Za-z0-9+/=]/g, ""));
+      let decodedData;
+
+      if (decodedStr) {
+          decodedData = JSON.parse(decodedStr);
+      } else {
+          // 2. 如果不是 Base64，嘗試直接解析 JSON
+          decodedData = JSON.parse(rawInput);
       }
       
-      if (decoded.id && decoded.name) {
+      if (decodedData && decodedData.id && decodedData.name) {
         const newFriend: Friend = {
-          id: decoded.id,
-          name: decoded.name,
+          id: decodedData.id,
+          name: decodedData.name,
           lastUpdated: Date.now(),
-          rounds: decoded.rounds || []
+          rounds: decodedData.rounds || []
         };
         dispatch({ type: 'ADD_FRIEND', payload: newFriend });
         setFriendCodeInput('');
         triggerToast(t('friendAdded'));
+        
+        // 如果是從 URL 進來的，清除 URL 參數避免重複彈出
+        if (manualCode) {
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+      } else {
+        throw new Error("Invalid structure");
       }
     } catch (e) {
+      console.error("Add friend error:", e);
       triggerToast(t('invalidCode'), 'error');
     } finally {
       setIsSyncing(false);
     }
   }, [friendCodeInput, dispatch, t]);
 
+  // 自動偵測網址列是否有 code 參數
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    if (code) {
+        // 延遲一點點確保 Context 已初始化
+        setTimeout(() => handleAddFriend(code), 1000);
+    }
+  }, [handleAddFriend]);
+
   const handleShare = async () => {
     const profile = { id: state.golferId, name: state.userName, rounds: state.pastRounds.slice(0, 10) };
-    const code = window.btoa(unescape(encodeURIComponent(JSON.stringify(profile))));
+    const code = safeBtoa(JSON.stringify(profile));
     const deepLink = `${window.location.origin}${window.location.pathname}?code=${code}`;
     
     if (navigator.share) {
-      await navigator.share({ title: t('shareTitle'), text: `${t('shareText')}\n${deepLink}` });
+      try {
+        await navigator.share({ title: t('shareTitle'), text: `${t('shareText')}\n`, url: deepLink });
+      } catch (e) {
+        // 使用者取消分享不報錯
+      }
     } else {
       await navigator.clipboard.writeText(deepLink);
       triggerToast(t('copySuccess'));
@@ -125,8 +179,8 @@ export const Social: React.FC = () => {
           <div className="flex justify-between items-center px-2">
             <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{t('friends')} ({state.friends.length})</div>
             <div className="text-[10px] font-bold text-indigo-500 uppercase flex items-center gap-1">
-                <RefreshCw size={10} className="animate-spin" />
-                Background Scanning...
+                <Zap size={10} className="text-yellow-400 animate-pulse" />
+                Live Sync Enabled
             </div>
           </div>
           
@@ -180,15 +234,27 @@ export const Social: React.FC = () => {
                   placeholder={t('pasteFriendCode')}
                   className="w-full h-20 bg-white/5 border border-white/10 rounded-xl p-4 text-sm focus:outline-none focus:border-indigo-500 no-scrollbar resize-none text-white font-medium"
               />
-              <button 
-                  onClick={() => handleAddFriend()}
-                  className="bg-indigo-500 hover:bg-indigo-400 py-4 rounded-xl font-black transition-all flex items-center justify-center gap-2"
-              >
-                  <UserPlus size={18} /> {t('addFriend')}
-              </button>
+              <div className="grid grid-cols-2 gap-2">
+                <button 
+                    onClick={() => handleAddFriend()}
+                    className="bg-indigo-500 hover:bg-indigo-400 py-4 rounded-xl font-black transition-all flex items-center justify-center gap-2"
+                >
+                    <Check size={18} /> {t('addFriend')}
+                </button>
+                <button 
+                    onClick={async () => {
+                        const text = await navigator.clipboard.readText();
+                        setFriendCodeInput(text);
+                        triggerToast("Pasted from clipboard");
+                    }}
+                    className="bg-white/10 hover:bg-white/20 py-4 rounded-xl font-black transition-all flex items-center justify-center gap-2"
+                >
+                    <LinkIcon size={18} /> Paste Link
+                </button>
+              </div>
           </div>
-          <p className="mt-4 text-[10px] text-gray-500 leading-relaxed italic">
-            * Once added, synchronization will happen automatically whenever both you and your friend have the app open. No more link sharing required.
+          <p className="mt-4 text-[10px] text-gray-400 leading-relaxed italic opacity-60">
+            * Tip: You can paste the entire URL shared by your friend. The app will automatically extract the code.
           </p>
       </div>
 
