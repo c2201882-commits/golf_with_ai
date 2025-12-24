@@ -63,24 +63,25 @@ export const Social: React.FC = () => {
     return safeBtoa(JSON.stringify({ id: state.golferId, name: state.userName }));
   };
 
-  const handleShare = async () => {
+  const handleShareToFriend = async () => {
     const code = generateMyCode();
     const link = `${window.location.origin}${window.location.pathname}?code=${code}`;
     
+    // 優先使用原生分享功能，若不支援則複製到剪貼簿
     if (navigator.share) {
       try {
-        await navigator.share({ title: t('shareTitle'), text: t('shareText'), url: link });
-      } catch (e) {}
+        await navigator.share({ 
+          title: t('shareTitle'), 
+          text: t('shareText'), 
+          url: link 
+        });
+      } catch (e) {
+        // 如果使用者取消分享，不執行任何動作
+      }
     } else {
       await navigator.clipboard.writeText(link);
       triggerToast(t('copySuccess'));
     }
-  };
-
-  const handleCopyCode = () => {
-    const code = generateMyCode();
-    navigator.clipboard.writeText(code);
-    triggerToast(t('copySuccess'));
   };
 
   const getRelativeTime = (time: number) => {
@@ -102,7 +103,7 @@ export const Social: React.FC = () => {
              <span className="text-[10px] font-black text-green-600 uppercase tracking-widest">Real-time P2P active</span>
           </div>
         </div>
-        <button onClick={() => window.location.reload()} className="p-2 text-gray-400 bg-white rounded-xl shadow-sm border border-gray-100"><RefreshCw size={20}/></button>
+        <button onClick={() => window.location.reload()} className="p-2 text-gray-400 bg-white rounded-xl shadow-sm border border-gray-100 active:rotate-180 transition-transform duration-500"><RefreshCw size={20}/></button>
       </div>
 
       {showToast && (
@@ -111,20 +112,26 @@ export const Social: React.FC = () => {
         </div>
       )}
 
-      {/* Profile Card */}
+      {/* Profile Card - Simplified */}
       <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden group">
         <div className="relative z-10">
-            <div className="flex justify-between items-start mb-8">
+            <div className="flex justify-between items-center mb-6">
                 <div>
                     <div className="text-[10px] font-black opacity-50 uppercase tracking-widest mb-1">{t('myId')}</div>
-                    <div className="text-4xl font-black tracking-tighter select-all">{state.golferId}</div>
+                    <div className="text-3xl font-black tracking-tighter">{state.userName}</div>
                 </div>
-                <div className="bg-white/10 p-4 rounded-3xl backdrop-blur-md border border-white/10"><Globe size={32} className="text-indigo-200" /></div>
+                <div className="bg-white/10 p-4 rounded-3xl backdrop-blur-md border border-white/10">
+                  <Globe size={32} className="text-indigo-200" />
+                </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-                <button onClick={handleShare} className="bg-white text-indigo-700 font-black py-4 rounded-2xl flex items-center justify-center gap-2 shadow-xl active:scale-95 transition-all text-sm"><Share2 size={18} /> {t('shareMyCode')}</button>
-                <button onClick={handleCopyCode} className="bg-indigo-500/50 backdrop-blur-md text-white font-black py-4 rounded-2xl flex items-center justify-center gap-2 border border-white/20 active:scale-95 transition-all text-sm"><Copy size={18} /> {t('copy')}</button>
-            </div>
+            
+            <button 
+              onClick={handleShareToFriend} 
+              className="w-full bg-white text-indigo-700 font-black py-5 rounded-2xl flex items-center justify-center gap-3 shadow-xl active:scale-95 transition-all text-lg"
+            >
+              <Share2 size={24} /> 
+              {t('copy')}
+            </button>
         </div>
         <div className="absolute -right-20 -top-20 w-64 h-64 bg-white/5 rounded-full blur-3xl"></div>
       </div>
@@ -133,7 +140,7 @@ export const Social: React.FC = () => {
       <div className="space-y-4">
           <div className="flex justify-between items-center px-2">
             <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{t('friends')} ({state.friends.length})</div>
-            <div className="text-[10px] font-bold text-indigo-500 uppercase flex items-center gap-1"><Zap size={10} className="text-yellow-400 animate-pulse" /> Full Sync Mode</div>
+            <div className="text-[10px] font-bold text-indigo-500 uppercase flex items-center gap-1"><Zap size={10} className="text-yellow-400 animate-pulse" /> Auto-Sync Active</div>
           </div>
           
           {state.friends.length === 0 ? (
@@ -174,7 +181,6 @@ export const Social: React.FC = () => {
               <textarea value={friendCodeInput} onChange={(e) => setFriendCodeInput(e.target.value)} placeholder={t('pasteFriendCode')} className="w-full h-20 bg-white/5 border border-white/10 rounded-xl p-4 text-sm focus:outline-none focus:border-indigo-500 no-scrollbar text-white font-medium resize-none" />
               <button onClick={() => handleAddFriend()} className="bg-indigo-500 hover:bg-indigo-400 py-4 rounded-xl font-black transition-all flex items-center justify-center gap-2"><UserPlus size={18} /> {t('addFriend')}</button>
           </div>
-          <p className="mt-4 text-[10px] text-gray-400 leading-relaxed italic opacity-80">* 數據現在會完全同步（包含刪除動作）。只要好友與您同時開啟 App，雙方資料就會自動維持一致。</p>
       </div>
 
       {/* Friend Detail */}
