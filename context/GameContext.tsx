@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, useReducer } from 'react';
 import { GameState, ClubName, Shot, RoundHoleData, ViewState, FinishedRound, Language, Friend } from '../types';
 import { translations, TranslationKey } from '../translations';
@@ -79,8 +80,15 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       return { ...state, currentHole: 1, currentPar: 4, currentShots: [], history: [], isEditingMode: false, editingHoleIndex: -1, maxHoleReached: 1, pastRounds: [newRound, ...state.pastRounds], view: 'PAST_GAMES' };
     }
     case 'ADD_FRIEND': {
-      const filtered = state.friends.filter(f => f.id !== action.payload.id);
-      return { ...state, friends: [action.payload, ...filtered] };
+      // SMART MERGE: Find if friend exists and update instead of duplicate
+      const friendExists = state.friends.find(f => f.id === action.payload.id);
+      if (friendExists) {
+          return {
+              ...state,
+              friends: state.friends.map(f => f.id === action.payload.id ? { ...action.payload, lastUpdated: Date.now() } : f)
+          };
+      }
+      return { ...state, friends: [action.payload, ...state.friends] };
     }
     case 'REMOVE_FRIEND': {
       return { ...state, friends: state.friends.filter(f => f.id !== action.payload) };
