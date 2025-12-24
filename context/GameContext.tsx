@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useEffect, useReducer, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useReducer, useRef, useState } from 'react';
 import { GameState, ClubName, Shot, RoundHoleData, ViewState, FinishedRound, Language, Friend } from '../types';
 import { translations, TranslationKey } from '../translations';
 import { Peer } from 'peerjs';
@@ -26,6 +26,8 @@ type Action =
   | { type: 'ADD_FRIEND'; payload: Friend }
   | { type: 'REMOVE_FRIEND'; payload: string };
 
+const CURRENT_STORAGE_KEY = 'golf_master_pro_v3';
+
 const initialState: GameState = {
   view: 'HOME',
   language: 'zh-TW', 
@@ -46,7 +48,16 @@ const initialState: GameState = {
 
 const gameReducer = (state: GameState, action: Action): GameState => {
   switch (action.type) {
-    case 'LOAD_STATE': return { ...initialState, ...action.payload, golferId: action.payload.golferId || initialState.golferId };
+    case 'LOAD_STATE': {
+      return { 
+        ...initialState, 
+        ...action.payload, 
+        // 確保核心 ID 不會被覆蓋為空
+        golferId: action.payload.golferId || state.golferId,
+        // 確保 pastRounds 始終是陣列
+        pastRounds: action.payload.pastRounds || []
+      };
+    }
     case 'SET_BAG': return { ...state, myBag: action.payload };
     case 'SET_VIEW': return { ...state, view: action.payload };
     case 'SET_LANGUAGE': return { ...state, language: action.payload };
@@ -98,30 +109,61 @@ const GameContext = createContext<GameContextProps | undefined>(undefined);
 
 export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(gameReducer, initialState);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
   const peerRef = useRef<any>(null);
 
+  // --- 啟動時：多版本數據遷移與讀取 ---
   useEffect(() => {
-    const saved = localStorage.getItem('golf_master_pro_v3');
-    if (saved) {
-      try { dispatch({ type: 'LOAD_STATE', payload: JSON.parse(saved) }); } catch (e) { console.error(e); }
+    const legacyKeys = [CURRENT_STORAGE_KEY, 'golf_master_pro_v2', 'golf_master_pro_v1', 'golf_master_pro'];
+    let migratedState: any = null;
+
+    for (const key of legacyKeys) {
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (!migratedState) {
+            migratedState = { ...parsed };
+          } else if (parsed.pastRounds && Array.isArray(parsed.pastRounds)) {
+            // 合併舊版紀錄，避免重複
+            const existingIds = new Set(migratedState.pastRounds.map((r: any) => r.id));
+            parsed.pastRounds.forEach((r: any) => {
+              if (!existingIds.has(r.id)) {
+                migratedState.pastRounds.push(r);
+              }
+            });
+          }
+        } catch (e) {
+          console.error(`Migration error from ${key}:`, e);
+        }
+      }
     }
+
+    if (migratedState) {
+      dispatch({ type: 'LOAD_STATE', payload: migratedState });
+    }
+    
+    // 標記為已載入，解鎖寫入權限
+    setIsDataLoaded(true);
   }, []);
 
+  // --- 存檔保護：只有載入完成後才允許存入 localStorage ---
   useEffect(() => {
-    localStorage.setItem('golf_master_pro_v3', JSON.stringify(state));
-  }, [state]);
+    if (isDataLoaded) {
+      localStorage.setItem(CURRENT_STORAGE_KEY, JSON.stringify(state));
+    }
+  }, [state, isDataLoaded]);
 
   // --- REAL-TIME P2P SYNC LOGIC ---
   useEffect(() => {
-    if (!state.golferId) return;
+    // 只有當數據載入完成，且我們拿到正確的 golferId 後才啟動 P2P
+    if (!isDataLoaded || !state.golferId) return;
 
-    // Initialize Peer with golferId as the address
     const peer = new Peer(state.golferId);
     peerRef.current = peer;
 
     peer.on('open', (id) => console.log('My P2P ID is: ' + id));
 
-    // Listen for incoming syncs from friends
     peer.on('connection', (conn) => {
       conn.on('data', (data: any) => {
         if (data && data.type === 'SYNC_PROFILE') {
@@ -130,7 +172,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
     });
 
-    // Automatically try to notify online friends whenever we update pastRounds
     const syncWithFriends = () => {
         const myProfile = {
             id: state.golferId,
@@ -146,13 +187,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
     };
 
-    // Broadcast update when rounds change
     if (state.pastRounds.length > 0) {
         syncWithFriends();
     }
 
     return () => peer.destroy();
-  }, [state.golferId, state.pastRounds.length, state.userName]); // Dependency on rounds length and name
+  }, [isDataLoaded, state.golferId, state.pastRounds.length, state.userName, state.friends.length]);
 
   const t = (key: TranslationKey) => translations[state.language][key] || translations['en'][key] || key;
 
