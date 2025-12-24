@@ -24,7 +24,8 @@ type Action =
   | { type: 'DELETE_ROUND'; payload: number } 
   | { type: 'CLEAR_HISTORY' }
   | { type: 'ADD_FRIEND'; payload: Friend }
-  | { type: 'REMOVE_FRIEND'; payload: string };
+  | { type: 'REMOVE_FRIEND'; payload: string }
+  | { type: 'UPDATE_FRIEND_ONLINE'; payload: { id: string; online: boolean } };
 
 const CURRENT_STORAGE_KEY = 'golf_master_pro_v3';
 
@@ -52,10 +53,9 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       return { 
         ...initialState, 
         ...action.payload, 
-        // 確保核心 ID 不會被覆蓋為空
         golferId: action.payload.golferId || state.golferId,
-        // 確保 pastRounds 始終是陣列
-        pastRounds: action.payload.pastRounds || []
+        pastRounds: Array.isArray(action.payload.pastRounds) ? action.payload.pastRounds : [],
+        friends: Array.isArray(action.payload.friends) ? action.payload.friends : []
       };
     }
     case 'SET_BAG': return { ...state, myBag: action.payload };
@@ -84,9 +84,18 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       return { ...state, currentHole: 1, currentPar: 4, currentShots: [], history: [], pastRounds: [newRound, ...state.pastRounds], view: 'PAST_GAMES' };
     }
     case 'ADD_FRIEND': {
-      const friendExists = state.friends.find(f => f.id === action.payload.id);
-      if (friendExists) {
-          return { ...state, friends: state.friends.map(f => f.id === action.payload.id ? { ...action.payload, lastUpdated: Date.now() } : f) };
+      const existingFriend = state.friends.find(f => f.id === action.payload.id);
+      if (existingFriend) {
+          // 合併好友的比賽紀錄，避免重複
+          const existingRoundIds = new Set(existingFriend.rounds.map(r => r.id));
+          const newRounds = [...existingFriend.rounds];
+          action.payload.rounds.forEach(r => {
+              if (!existingRoundIds.has(r.id)) newRounds.push(r);
+          });
+          return { 
+            ...state, 
+            friends: state.friends.map(f => f.id === action.payload.id ? { ...action.payload, rounds: newRounds, lastUpdated: Date.now() } : f) 
+          };
       }
       return { ...state, friends: [action.payload, ...state.friends] };
     }
@@ -111,88 +120,119 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [state, dispatch] = useReducer(gameReducer, initialState);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const peerRef = useRef<any>(null);
+  const activeConnections = useRef<Map<string, any>>(new Map());
 
-  // --- 啟動時：多版本數據遷移與讀取 ---
+  // 1. 數據遷移與載入 (保持您的歷史紀錄不遺失)
   useEffect(() => {
     const legacyKeys = [CURRENT_STORAGE_KEY, 'golf_master_pro_v2', 'golf_master_pro_v1', 'golf_master_pro'];
-    let migratedState: any = null;
+    let finalState: any = null;
 
-    for (const key of legacyKeys) {
+    legacyKeys.forEach(key => {
       const saved = localStorage.getItem(key);
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          if (!migratedState) {
-            migratedState = { ...parsed };
-          } else if (parsed.pastRounds && Array.isArray(parsed.pastRounds)) {
-            // 合併舊版紀錄，避免重複
-            const existingIds = new Set(migratedState.pastRounds.map((r: any) => r.id));
-            parsed.pastRounds.forEach((r: any) => {
-              if (!existingIds.has(r.id)) {
-                migratedState.pastRounds.push(r);
-              }
-            });
+          if (!finalState) {
+            finalState = { ...parsed };
+          } else {
+            // 合併比賽紀錄
+            if (parsed.pastRounds) {
+              const currentIds = new Set(finalState.pastRounds.map((r: any) => r.id));
+              parsed.pastRounds.forEach((r: any) => {
+                if (!currentIds.has(r.id)) finalState.pastRounds.push(r);
+              });
+            }
           }
-        } catch (e) {
-          console.error(`Migration error from ${key}:`, e);
-        }
+        } catch (e) {}
       }
-    }
+    });
 
-    if (migratedState) {
-      dispatch({ type: 'LOAD_STATE', payload: migratedState });
-    }
-    
-    // 標記為已載入，解鎖寫入權限
+    if (finalState) dispatch({ type: 'LOAD_STATE', payload: finalState });
     setIsDataLoaded(true);
   }, []);
 
-  // --- 存檔保護：只有載入完成後才允許存入 localStorage ---
+  // 2. 存檔保護
   useEffect(() => {
     if (isDataLoaded) {
       localStorage.setItem(CURRENT_STORAGE_KEY, JSON.stringify(state));
     }
   }, [state, isDataLoaded]);
 
-  // --- REAL-TIME P2P SYNC LOGIC ---
+  // 3. 自動同步核心 (P2P Handshake)
   useEffect(() => {
-    // 只有當數據載入完成，且我們拿到正確的 golferId 後才啟動 P2P
     if (!isDataLoaded || !state.golferId) return;
 
     const peer = new Peer(state.golferId);
     peerRef.current = peer;
 
-    peer.on('open', (id) => console.log('My P2P ID is: ' + id));
+    const syncWithProfile = (conn: any) => {
+      conn.send({
+        type: 'SYNC_DATA',
+        payload: {
+          id: state.golferId,
+          name: state.userName,
+          rounds: state.pastRounds.slice(0, 20) // 只發送最近20場
+        }
+      });
+    };
+
+    peer.on('open', () => {
+      // 啟動時自動嘗試連接所有已加的好友
+      state.friends.forEach(friend => {
+        const conn = peer.connect(friend.id);
+        conn.on('open', () => {
+          activeConnections.current.set(friend.id, conn);
+          syncWithProfile(conn);
+        });
+        conn.on('data', (data: any) => {
+          if (data?.type === 'SYNC_DATA') {
+            dispatch({ type: 'ADD_FRIEND', payload: data.payload });
+          }
+        });
+        conn.on('close', () => activeConnections.current.delete(friend.id));
+      });
+    });
 
     peer.on('connection', (conn) => {
+      conn.on('open', () => {
+        activeConnections.current.set(conn.peer, conn);
+        // 當別人連我時，我也回傳我的最新數據給他
+        syncWithProfile(conn);
+      });
       conn.on('data', (data: any) => {
-        if (data && data.type === 'SYNC_PROFILE') {
+        if (data?.type === 'SYNC_DATA') {
           dispatch({ type: 'ADD_FRIEND', payload: data.payload });
         }
       });
     });
 
-    const syncWithFriends = () => {
-        const myProfile = {
-            id: state.golferId,
-            name: state.userName,
-            rounds: state.pastRounds.slice(0, 10)
-        };
-        
-        state.friends.forEach(friend => {
-            const conn = peer.connect(friend.id);
-            conn.on('open', () => {
-                conn.send({ type: 'SYNC_PROFILE', payload: myProfile });
-            });
-        });
+    // 當我的紀錄有變更時，自動廣播給所有目前連線中的好友
+    const broadcastUpdate = () => {
+      activeConnections.current.forEach(conn => {
+        if (conn.open) syncWithProfile(conn);
+      });
     };
 
-    if (state.pastRounds.length > 0) {
-        syncWithFriends();
-    }
+    if (state.pastRounds.length > 0) broadcastUpdate();
 
-    return () => peer.destroy();
-  }, [isDataLoaded, state.golferId, state.pastRounds.length, state.userName, state.friends.length]);
+    // 每 60 秒嘗試重新連接一次離線的好友
+    const retryInterval = setInterval(() => {
+      state.friends.forEach(friend => {
+        if (!activeConnections.current.has(friend.id)) {
+          const conn = peer.connect(friend.id);
+          conn.on('open', () => {
+            activeConnections.current.set(friend.id, conn);
+            syncWithProfile(conn);
+          });
+        }
+      });
+    }, 60000);
+
+    return () => {
+      clearInterval(retryInterval);
+      peer.destroy();
+    };
+  }, [isDataLoaded, state.golferId, state.pastRounds.length, state.userName]);
 
   const t = (key: TranslationKey) => translations[state.language][key] || translations['en'][key] || key;
 
