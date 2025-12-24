@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useGame } from '../context/GameContext';
 import { Friend } from '../types';
-import { UserPlus, Share2, ChevronRight, X, RefreshCw, Clock, Zap, Globe, ShieldCheck, Copy } from 'lucide-react';
+import { UserPlus, Share2, ChevronRight, X, RefreshCw, Clock, Zap, Globe, ShieldCheck } from 'lucide-react';
 
 export const Social: React.FC = () => {
   const { state, dispatch, t } = useGame();
@@ -30,6 +30,14 @@ export const Social: React.FC = () => {
   const handleAddFriend = useCallback((manualCode?: string) => {
     let rawInput = (manualCode || friendCodeInput).trim();
     if (!rawInput) return;
+
+    // 支援從完整文字塊中提取代碼 (尋找 Code: 之後的部分)
+    if (rawInput.includes('Code:')) {
+        const parts = rawInput.split('Code:');
+        if (parts.length > 1) {
+            rawInput = parts[1].trim().split('\n')[0].split(' ')[0];
+        }
+    }
 
     // 如果輸入包含網址，自動提取 code 參數
     if (rawInput.includes('code=')) {
@@ -61,25 +69,41 @@ export const Social: React.FC = () => {
   }, [handleAddFriend]);
 
   const handleShareToFriend = async () => {
-    // 關鍵優化：分享僅包含簡短代碼，避免長網址複製失敗
+    // 關鍵優化：分享僅包含簡短代碼文字塊
     const myCode = safeBtoa(JSON.stringify({ id: state.golferId, name: state.userName }));
+    const shareText = `${t('shareText')}\nCode: ${myCode}`;
     
-    // 如果系統支援分享功能，還是可以嘗試帶網址的完整分享
+    // 如果系統支援分享功能，直接分享文字內容
     if (navigator.share) {
-      const fullLink = `${window.location.origin}${window.location.pathname}?code=${myCode}`;
       try {
         await navigator.share({ 
           title: t('shareTitle'), 
-          text: `${t('shareText')}\nCode: ${myCode}`, 
-          url: fullLink 
+          text: shareText
         });
       } catch (e) {
-        // 使用者取消分享
+        // 使用者取消分享或環境不支援
+        await copyToClipboard(shareText);
       }
     } else {
-      // 若不支援分享或在某些瀏覽器環境，直接複製純代碼
-      await navigator.clipboard.writeText(myCode);
+      await copyToClipboard(shareText);
+    }
+  };
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
       triggerToast(t('copySuccess'));
+    } catch (err) {
+      // 備用方案：如果 clipboard API 失敗
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      document.body.appendChild(textArea);
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        triggerToast(t('copySuccess'));
+      } catch (e) {}
+      document.body.removeChild(textArea);
     }
   };
 
@@ -111,7 +135,7 @@ export const Social: React.FC = () => {
         </div>
       )}
 
-      {/* Profile Card - Ultra Simplified */}
+      {/* Profile Card */}
       <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden group">
         <div className="relative z-10">
             <div className="flex justify-between items-center mb-6">
@@ -174,7 +198,7 @@ export const Social: React.FC = () => {
           )}
       </div>
 
-      {/* Manual Input - Simplified */}
+      {/* Manual Input */}
       <div className="bg-gray-900 rounded-[2rem] p-6 text-white shadow-xl">
           <div className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-4">{t('addFriend')}</div>
           <div className="flex flex-col gap-3">
