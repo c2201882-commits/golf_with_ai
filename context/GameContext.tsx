@@ -84,28 +84,28 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       return { ...state, currentHole: 1, currentPar: 4, currentShots: [], history: [], pastRounds: [newRound, ...state.pastRounds], view: 'PAST_GAMES' };
     }
     case 'ADD_FRIEND': {
-      const existingFriend = state.friends.find(f => f.id === action.payload.id);
-      if (existingFriend) return state; // 已經是好友，不重複加入
-      const newFriend: Friend = {
-        id: action.payload.id,
-        name: action.payload.name,
-        lastUpdated: Date.now(),
-        rounds: action.payload.rounds || []
+      const exists = state.friends.some(f => f.id === action.payload.id);
+      if (exists) return state;
+      return { 
+        ...state, 
+        friends: [{ 
+          id: action.payload.id, 
+          name: action.payload.name, 
+          lastUpdated: Date.now(), 
+          rounds: action.payload.rounds || [] 
+        }, ...state.friends] 
       };
-      return { ...state, friends: [newFriend, ...state.friends] };
     }
     case 'UPDATE_FRIEND_DATA': {
       return {
         ...state,
         friends: state.friends.map(f => {
           if (f.id === action.payload.id) {
-            // 合併比賽紀錄，確保 ID 唯一的紀錄被加入
-            const existingIds = new Set(f.rounds.map(r => r.id));
-            const mergedRounds = [...f.rounds];
-            action.payload.rounds.forEach(r => {
-              if (!existingIds.has(r.id)) mergedRounds.push(r);
-            });
-            return { ...action.payload, rounds: mergedRounds, lastUpdated: Date.now() };
+            // 修正：直接以傳過來的數據為準，這樣刪除才能同步
+            return { 
+              ...action.payload, 
+              lastUpdated: Date.now() 
+            };
           }
           return f;
         })
@@ -153,29 +153,30 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [state, isDataLoaded]);
 
-  // 3. P2P 同步邏輯
+  // 3. P2P 同步邏輯 (精簡版，只管數據交換)
   useEffect(() => {
     if (!isDataLoaded || !state.golferId) return;
 
     const peer = new Peer(state.golferId);
     peerRef.current = peer;
 
-    const sendMyData = (conn: any) => {
-      if (conn && conn.open) {
-        conn.send({
-          type: 'SYNC_DATA',
-          payload: {
-            id: state.golferId,
-            name: state.userName,
-            rounds: state.pastRounds.slice(0, 30) // 發送最近 30 場
-          }
-        });
-      }
+    const broadcastMyData = () => {
+      activeConnections.current.forEach(conn => {
+        if (conn.open) {
+          conn.send({
+            type: 'SYNC_DATA',
+            payload: {
+              id: state.golferId,
+              name: state.userName,
+              rounds: state.pastRounds.slice(0, 50) // 送出最近 50 場
+            }
+          });
+        }
+      });
     };
 
-    peer.on('open', (id) => {
-      console.log('My Peer ID:', id);
-      // 主動連接所有好友
+    peer.on('open', () => {
+      // 嘗試連線所有好友
       state.friends.forEach(friend => {
         const conn = peer.connect(friend.id);
         setupConnection(conn);
@@ -183,67 +184,65 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     peer.on('connection', (conn) => {
-      setupConnection(conn);
+        setupConnection(conn);
     });
 
     const setupConnection = (conn: any) => {
-      conn.on('open', () => {
-        activeConnections.current.set(conn.peer, conn);
-        sendMyData(conn);
-      });
-      conn.on('data', (data: any) => {
-        if (data?.type === 'SYNC_DATA') {
-          // 如果是未知好友，先自動加入好友名單
-          const isFriend = state.friends.some(f => f.id === data.payload.id);
-          if (!isFriend) {
-            dispatch({ type: 'ADD_FRIEND', payload: { id: data.payload.id, name: data.payload.name } });
-          }
-          dispatch({ type: 'UPDATE_FRIEND_DATA', payload: data.payload });
-        }
-      });
-      conn.on('close', () => {
-        activeConnections.current.delete(conn.peer);
-      });
-      conn.on('error', () => {
-        activeConnections.current.delete(conn.peer);
-      });
+        conn.on('open', () => {
+            activeConnections.current.set(conn.peer, conn);
+            // 連上後立刻互相交換資料
+            conn.send({
+                type: 'SYNC_DATA',
+                payload: {
+                  id: state.golferId,
+                  name: state.userName,
+                  rounds: state.pastRounds.slice(0, 50)
+                }
+            });
+        });
+        conn.on('data', (data: any) => {
+            if (data?.type === 'SYNC_DATA') {
+                const isFriend = state.friends.some(f => f.id === data.payload.id);
+                if (!isFriend) {
+                    dispatch({ type: 'ADD_FRIEND', payload: data.payload });
+                } else {
+                    dispatch({ type: 'UPDATE_FRIEND_DATA', payload: data.payload });
+                }
+            }
+        });
+        conn.on('close', () => activeConnections.current.delete(conn.peer));
     };
 
-    // 每 2 分鐘嘗試重連離線好友
-    const interval = setInterval(() => {
-      state.friends.forEach(f => {
-        if (!activeConnections.current.has(f.id)) {
-          const conn = peer.connect(f.id);
-          setupConnection(conn);
-        }
-      });
+    // 每 2 分鐘嘗試重連
+    const retryInterval = setInterval(() => {
+        state.friends.forEach(f => {
+            if (!activeConnections.current.has(f.id)) {
+                setupConnection(peer.connect(f.id));
+            }
+        });
     }, 120000);
 
     return () => {
-      clearInterval(interval);
-      peer.destroy();
+        clearInterval(retryInterval);
+        peer.destroy();
     };
   }, [isDataLoaded, state.golferId, state.friends.length]);
 
-  // 當我的比賽紀錄更新時，廣播給所有目前連線中的好友
+  // 當「我的紀錄」發生變化（新增或刪除）時，通知好友
   useEffect(() => {
     if (!isDataLoaded) return;
     activeConnections.current.forEach(conn => {
-      sendMyData(conn);
+        if (conn.open) {
+            conn.send({
+                type: 'SYNC_DATA',
+                payload: {
+                  id: state.golferId,
+                  name: state.userName,
+                  rounds: state.pastRounds.slice(0, 50)
+                }
+            });
+        }
     });
-    
-    function sendMyData(conn: any) {
-      if (conn && conn.open) {
-        conn.send({
-          type: 'SYNC_DATA',
-          payload: {
-            id: state.golferId,
-            name: state.userName,
-            rounds: state.pastRounds.slice(0, 30)
-          }
-        });
-      }
-    }
   }, [state.pastRounds.length, state.userName]);
 
   const t = (key: TranslationKey) => translations[state.language][key] || translations['en'][key] || key;
