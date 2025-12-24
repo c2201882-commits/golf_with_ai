@@ -2,21 +2,20 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useGame } from '../context/GameContext';
 import { Friend } from '../types';
-import { UserPlus, Share2, Check, Trash2, Calendar, ChevronRight, X, Trophy, AlertCircle, RefreshCw, Clock, Zap, Globe, ShieldCheck, Link as LinkIcon } from 'lucide-react';
+import { UserPlus, Share2, Check, Trash2, ChevronRight, X, RefreshCw, Clock, Zap, Globe, ShieldCheck, Link as LinkIcon, Copy } from 'lucide-react';
 
 export const Social: React.FC = () => {
   const { state, dispatch, t } = useGame();
   const [friendCodeInput, setFriendCodeInput] = useState('');
   const [showToast, setShowToast] = useState<{msg: string, type: 'success' | 'error'} | null>(null);
   const [viewingFriend, setViewingFriend] = useState<Friend | null>(null);
-  const [isSyncing, setIsSyncing] = useState(false);
 
   const triggerToast = (msg: string, type: 'success' | 'error' = 'success') => {
     setShowToast({ msg, type });
     setTimeout(() => setShowToast(null), 3000);
   };
 
-  // 安全的 Unicode Base64 解碼
+  // 安全的 Unicode Base64 解碼 (修正中文字元報錯)
   const safeAtob = (str: string) => {
     try {
       return decodeURIComponent(atob(str).split('').map(function(c) {
@@ -42,40 +41,27 @@ export const Social: React.FC = () => {
     let rawInput = (manualCode || friendCodeInput).trim();
     if (!rawInput) return;
 
-    // 如果輸入的是完整 URL，嘗試提取 code 參數
-    if (rawInput.includes('?code=')) {
+    // 如果輸入的是完整 URL，自動提取 code 參數
+    if (rawInput.includes('code=')) {
         try {
             const url = new URL(rawInput);
             const codeParam = url.searchParams.get('code');
             if (codeParam) rawInput = codeParam;
-        } catch(e) {}
+        } catch(e) {
+            const match = rawInput.match(/code=([^&]+)/);
+            if (match) rawInput = match[1];
+        }
     }
 
-    setIsSyncing(true);
     try {
-      // 1. 嘗試 Base64 解碼
       let decodedStr = safeAtob(rawInput.replace(/[^A-Za-z0-9+/=]/g, ""));
-      let decodedData;
-
-      if (decodedStr) {
-          decodedData = JSON.parse(decodedStr);
-      } else {
-          // 2. 如果不是 Base64，嘗試直接解析 JSON
-          decodedData = JSON.parse(rawInput);
-      }
+      let decodedData = decodedStr ? JSON.parse(decodedStr) : JSON.parse(rawInput);
       
       if (decodedData && decodedData.id && decodedData.name) {
-        const newFriend: Friend = {
-          id: decodedData.id,
-          name: decodedData.name,
-          lastUpdated: Date.now(),
-          rounds: decodedData.rounds || []
-        };
-        dispatch({ type: 'ADD_FRIEND', payload: newFriend });
+        dispatch({ type: 'ADD_FRIEND', payload: { id: decodedData.id, name: decodedData.name } });
         setFriendCodeInput('');
         triggerToast(t('friendAdded'));
         
-        // 如果是從 URL 進來的，清除 URL 參數避免重複彈出
         if (manualCode) {
             window.history.replaceState({}, document.title, window.location.pathname);
         }
@@ -83,38 +69,45 @@ export const Social: React.FC = () => {
         throw new Error("Invalid structure");
       }
     } catch (e) {
-      console.error("Add friend error:", e);
       triggerToast(t('invalidCode'), 'error');
-    } finally {
-      setIsSyncing(false);
     }
   }, [friendCodeInput, dispatch, t]);
 
-  // 自動偵測網址列是否有 code 參數
+  // 自動處理 URL 參數
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const code = params.get('code');
     if (code) {
-        // 延遲一點點確保 Context 已初始化
-        setTimeout(() => handleAddFriend(code), 1000);
+        setTimeout(() => handleAddFriend(code), 500);
     }
   }, [handleAddFriend]);
 
   const handleShare = async () => {
-    const profile = { id: state.golferId, name: state.userName, rounds: state.pastRounds.slice(0, 10) };
-    const code = safeBtoa(JSON.stringify(profile));
+    // 關鍵優化：只分享 ID 與 姓名，數據透過 P2P 在背景同步
+    // 這樣生成的代碼極短，不會因為過長而被系統截斷或導致 atob 失敗
+    const profileMinimal = { id: state.golferId, name: state.userName };
+    const code = safeBtoa(JSON.stringify(profileMinimal));
     const deepLink = `${window.location.origin}${window.location.pathname}?code=${code}`;
     
     if (navigator.share) {
       try {
-        await navigator.share({ title: t('shareTitle'), text: `${t('shareText')}\n`, url: deepLink });
-      } catch (e) {
-        // 使用者取消分享不報錯
-      }
+        await navigator.share({ 
+            title: t('shareTitle'), 
+            text: `${t('shareText')}\nID: ${state.golferId}`, 
+            url: deepLink 
+        });
+      } catch (e) {}
     } else {
       await navigator.clipboard.writeText(deepLink);
       triggerToast(t('copySuccess'));
     }
+  };
+
+  const copyOnlyId = () => {
+    const profileMinimal = { id: state.golferId, name: state.userName };
+    const code = safeBtoa(JSON.stringify(profileMinimal));
+    navigator.clipboard.writeText(code);
+    triggerToast(t('copySuccess'));
   };
 
   const getRelativeTime = (timestamp: number) => {
@@ -134,7 +127,7 @@ export const Social: React.FC = () => {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
              </div>
-             <span className="text-[10px] font-black text-green-600 uppercase tracking-widest">Auto-Sync Active</span>
+             <span className="text-[10px] font-black text-green-600 uppercase tracking-widest">Live Auto-Sync</span>
           </div>
         </div>
         <button 
@@ -146,7 +139,7 @@ export const Social: React.FC = () => {
       </div>
 
       {showToast && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-2 animate-bounce-short text-sm font-bold">
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-2 animate-bounce-short text-sm font-bold border border-white/10">
           <ShieldCheck size={16} className="text-green-400" /> {showToast.msg}
         </div>
       )}
@@ -163,13 +156,23 @@ export const Social: React.FC = () => {
                     <Globe size={32} className="text-indigo-200" />
                 </div>
             </div>
-            <button 
-                onClick={handleShare}
-                className="w-full bg-white text-indigo-700 font-black py-5 rounded-2xl flex items-center justify-center gap-2 shadow-xl active:scale-95 transition-all"
-            >
-                <Share2 size={20} />
-                {t('shareMyCode')}
-            </button>
+            
+            <div className="grid grid-cols-2 gap-3">
+                <button 
+                    onClick={handleShare}
+                    className="bg-white text-indigo-700 font-black py-4 rounded-2xl flex items-center justify-center gap-2 shadow-xl active:scale-95 transition-all text-sm"
+                >
+                    <Share2 size={18} />
+                    {t('shareMyCode')}
+                </button>
+                <button 
+                    onClick={copyOnlyId}
+                    className="bg-indigo-500/50 backdrop-blur-md text-white font-black py-4 rounded-2xl flex items-center justify-center gap-2 border border-white/20 active:scale-95 transition-all text-sm"
+                >
+                    <Copy size={18} />
+                    Copy Code
+                </button>
+            </div>
         </div>
         <div className="absolute -right-20 -top-20 w-64 h-64 bg-white/5 rounded-full blur-3xl group-hover:bg-white/10 transition-colors"></div>
       </div>
@@ -180,7 +183,7 @@ export const Social: React.FC = () => {
             <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{t('friends')} ({state.friends.length})</div>
             <div className="text-[10px] font-bold text-indigo-500 uppercase flex items-center gap-1">
                 <Zap size={10} className="text-yellow-400 animate-pulse" />
-                Live Sync Enabled
+                Real-time Syncing
             </div>
           </div>
           
@@ -224,7 +227,7 @@ export const Social: React.FC = () => {
           )}
       </div>
 
-      {/* Manually Add */}
+      {/* Add Friend Box */}
       <div className="bg-gray-900 rounded-[2rem] p-6 text-white shadow-xl">
           <div className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-4">{t('addFriend')}</div>
           <div className="flex flex-col gap-3">
@@ -239,7 +242,7 @@ export const Social: React.FC = () => {
                     onClick={() => handleAddFriend()}
                     className="bg-indigo-500 hover:bg-indigo-400 py-4 rounded-xl font-black transition-all flex items-center justify-center gap-2"
                 >
-                    <Check size={18} /> {t('addFriend')}
+                    <UserPlus size={18} /> {t('addFriend')}
                 </button>
                 <button 
                     onClick={async () => {
@@ -253,8 +256,8 @@ export const Social: React.FC = () => {
                 </button>
               </div>
           </div>
-          <p className="mt-4 text-[10px] text-gray-400 leading-relaxed italic opacity-60">
-            * Tip: You can paste the entire URL shared by your friend. The app will automatically extract the code.
+          <p className="mt-4 text-[11px] text-gray-400 leading-relaxed italic opacity-80">
+            * <strong>One-time Setup:</strong> Once you add a friend, your data will sync automatically whenever both are online. No more code sharing needed.
           </p>
       </div>
 
@@ -268,14 +271,18 @@ export const Social: React.FC = () => {
                       </div>
                       <div>
                           <div className="font-black text-3xl tracking-tighter">{viewingFriend.name}</div>
-                          <div className="text-[10px] font-black opacity-60 uppercase tracking-widest">Synced {getRelativeTime(viewingFriend.lastUpdated)}</div>
+                          <div className="text-[10px] font-black opacity-60 uppercase tracking-widest">Auto-Synced {getRelativeTime(viewingFriend.lastUpdated)}</div>
                       </div>
                   </div>
                   <button onClick={() => setViewingFriend(null)} className="p-2 bg-white/10 rounded-full"><X size={28} /></button>
               </div>
               <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50/50 no-scrollbar">
                   {viewingFriend.rounds.length === 0 ? (
-                      <div className="text-center py-20 text-gray-400 font-bold">No records found for this player.</div>
+                      <div className="text-center py-20 bg-white rounded-3xl p-8 border-2 border-dashed border-gray-100">
+                          <Zap size={48} className="mx-auto mb-4 text-indigo-200" />
+                          <p className="font-bold text-gray-400">Waiting for friend to sync data...</p>
+                          <p className="text-xs text-gray-300 mt-2 italic">Connection established. Data will appear automatically shortly.</p>
+                      </div>
                   ) : (
                       viewingFriend.rounds.map(round => (
                           <div key={round.id} className="bg-white rounded-[2rem] p-6 border border-gray-100 shadow-sm animate-slide-up">
