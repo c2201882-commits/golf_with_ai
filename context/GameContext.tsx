@@ -1,7 +1,8 @@
 
-import React, { createContext, useContext, useEffect, useReducer } from 'react';
+import React, { createContext, useContext, useEffect, useReducer, useRef } from 'react';
 import { GameState, ClubName, Shot, RoundHoleData, ViewState, FinishedRound, Language, Friend } from '../types';
 import { translations, TranslationKey } from '../translations';
+import { Peer } from 'peerjs';
 
 type Action =
   | { type: 'LOAD_STATE'; payload: GameState }
@@ -45,15 +46,7 @@ const initialState: GameState = {
 
 const gameReducer = (state: GameState, action: Action): GameState => {
   switch (action.type) {
-    case 'LOAD_STATE': {
-      return { 
-        ...initialState, 
-        ...action.payload,
-        friends: Array.isArray(action.payload.friends) ? action.payload.friends : [],
-        pastRounds: Array.isArray(action.payload.pastRounds) ? action.payload.pastRounds : [],
-        golferId: action.payload.golferId || initialState.golferId
-      };
-    }
+    case 'LOAD_STATE': return { ...initialState, ...action.payload, golferId: action.payload.golferId || initialState.golferId };
     case 'SET_BAG': return { ...state, myBag: action.payload };
     case 'SET_VIEW': return { ...state, view: action.payload };
     case 'SET_LANGUAGE': return { ...state, language: action.payload };
@@ -77,30 +70,19 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       const totalPar = state.history.reduce((acc, h) => acc + h.par, 0);
       const totalPutts = state.history.reduce((acc, h) => acc + h.putts, 0);
       const newRound: FinishedRound = { id: `round_${Date.now()}`, courseName: action.payload.courseName, date: action.payload.date, playerName: state.userName, holes: [...state.history], totalScore, totalPar, totalPutts };
-      return { ...state, currentHole: 1, currentPar: 4, currentShots: [], history: [], isEditingMode: false, editingHoleIndex: -1, maxHoleReached: 1, pastRounds: [newRound, ...state.pastRounds], view: 'PAST_GAMES' };
+      return { ...state, currentHole: 1, currentPar: 4, currentShots: [], history: [], pastRounds: [newRound, ...state.pastRounds], view: 'PAST_GAMES' };
     }
     case 'ADD_FRIEND': {
-      // SMART MERGE: Find if friend exists and update instead of duplicate
       const friendExists = state.friends.find(f => f.id === action.payload.id);
       if (friendExists) {
-          return {
-              ...state,
-              friends: state.friends.map(f => f.id === action.payload.id ? { ...action.payload, lastUpdated: Date.now() } : f)
-          };
+          return { ...state, friends: state.friends.map(f => f.id === action.payload.id ? { ...action.payload, lastUpdated: Date.now() } : f) };
       }
       return { ...state, friends: [action.payload, ...state.friends] };
     }
-    case 'REMOVE_FRIEND': {
-      return { ...state, friends: state.friends.filter(f => f.id !== action.payload) };
-    }
-    case 'RESUME_GAME':
-      return { ...state, isEditingMode: false, editingHoleIndex: -1, view: (state.history.length >= 18) ? 'ANALYSIS' : 'HOLE_SETUP' };
+    case 'REMOVE_FRIEND': return { ...state, friends: state.friends.filter(f => f.id !== action.payload) };
+    case 'RESUME_GAME': return { ...state, view: (state.history.length >= 18) ? 'ANALYSIS' : 'HOLE_SETUP' };
     case 'RESET_GAME': return { ...state, view: 'HOME', currentHole: 1, currentShots: [], history: [], maxHoleReached: 1 };
-    case 'DELETE_ROUND': {
-      const newRounds = [...state.pastRounds];
-      newRounds.splice(action.payload, 1);
-      return { ...state, pastRounds: newRounds };
-    }
+    case 'DELETE_ROUND': return { ...state, pastRounds: state.pastRounds.filter((_, i) => i !== action.payload) };
     case 'CLEAR_HISTORY': return { ...state, pastRounds: [] };
     default: return state;
   }
@@ -113,24 +95,64 @@ interface GameContextProps {
 }
 
 const GameContext = createContext<GameContextProps | undefined>(undefined);
-const LOCAL_STORAGE_KEY = 'golf_master_pro_v2'; 
 
 export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(gameReducer, initialState);
+  const peerRef = useRef<any>(null);
 
   useEffect(() => {
-    const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+    const saved = localStorage.getItem('golf_master_pro_v3');
     if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        dispatch({ type: 'LOAD_STATE', payload: parsed });
-      } catch (e) { console.error(e); }
+      try { dispatch({ type: 'LOAD_STATE', payload: JSON.parse(saved) }); } catch (e) { console.error(e); }
     }
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem('golf_master_pro_v3', JSON.stringify(state));
   }, [state]);
+
+  // --- REAL-TIME P2P SYNC LOGIC ---
+  useEffect(() => {
+    if (!state.golferId) return;
+
+    // Initialize Peer with golferId as the address
+    const peer = new Peer(state.golferId);
+    peerRef.current = peer;
+
+    peer.on('open', (id) => console.log('My P2P ID is: ' + id));
+
+    // Listen for incoming syncs from friends
+    peer.on('connection', (conn) => {
+      conn.on('data', (data: any) => {
+        if (data && data.type === 'SYNC_PROFILE') {
+          dispatch({ type: 'ADD_FRIEND', payload: data.payload });
+        }
+      });
+    });
+
+    // Automatically try to notify online friends whenever we update pastRounds
+    const syncWithFriends = () => {
+        const myProfile = {
+            id: state.golferId,
+            name: state.userName,
+            rounds: state.pastRounds.slice(0, 10)
+        };
+        
+        state.friends.forEach(friend => {
+            const conn = peer.connect(friend.id);
+            conn.on('open', () => {
+                conn.send({ type: 'SYNC_PROFILE', payload: myProfile });
+            });
+        });
+    };
+
+    // Broadcast update when rounds change
+    if (state.pastRounds.length > 0) {
+        syncWithFriends();
+    }
+
+    return () => peer.destroy();
+  }, [state.golferId, state.pastRounds.length, state.userName]); // Dependency on rounds length and name
 
   const t = (key: TranslationKey) => translations[state.language][key] || translations['en'][key] || key;
 
