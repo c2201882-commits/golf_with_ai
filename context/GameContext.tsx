@@ -1,8 +1,7 @@
 import React, { createContext, useContext, useEffect, useReducer } from 'react';
-import { GameState, ClubName, Shot, RoundHoleData, ViewState, FinishedRound, Language } from '../types';
+import { GameState, ClubName, Shot, RoundHoleData, ViewState, FinishedRound, Language, Friend } from '../types';
 import { translations, TranslationKey } from '../translations';
 
-// --- Actions ---
 type Action =
   | { type: 'LOAD_STATE'; payload: GameState }
   | { type: 'SET_BAG'; payload: ClubName[] }
@@ -21,176 +20,81 @@ type Action =
   | { type: 'RESUME_GAME' }
   | { type: 'RESET_GAME' }
   | { type: 'DELETE_ROUND'; payload: number } 
-  | { type: 'CLEAR_HISTORY' };
+  | { type: 'CLEAR_HISTORY' }
+  | { type: 'ADD_FRIEND'; payload: Friend }
+  | { type: 'REMOVE_FRIEND'; payload: string };
 
-// --- Initial State ---
 const initialState: GameState = {
   view: 'HOME',
   language: 'zh-TW', 
   myBag: ["Driver", "Hybrid", "7 Iron", "8 Iron", "9 Iron", "PW", "SW", "Putter"],
   userName: "Golfer",
+  golferId: `GF-${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
   homeBackgroundImage: null,
   currentHole: 1,
   currentPar: 4,
   currentShots: [],
   history: [],
   pastRounds: [],
+  friends: [],
   isEditingMode: false,
   editingHoleIndex: -1,
   maxHoleReached: 1,
 };
 
-// --- Reducer ---
 const gameReducer = (state: GameState, action: Action): GameState => {
   switch (action.type) {
     case 'LOAD_STATE': {
-      const safePastRounds = Array.isArray(action.payload.pastRounds) ? action.payload.pastRounds : [];
       return { 
         ...initialState, 
         ...action.payload,
-        homeBackgroundImage: action.payload.homeBackgroundImage || null,
-        pastRounds: safePastRounds,
-        language: action.payload.language || 'zh-TW' 
+        friends: Array.isArray(action.payload.friends) ? action.payload.friends : [],
+        pastRounds: Array.isArray(action.payload.pastRounds) ? action.payload.pastRounds : [],
+        golferId: action.payload.golferId || initialState.golferId
       };
     }
-    case 'SET_BAG':
-      return { ...state, myBag: action.payload };
-    case 'SET_VIEW':
-      return { ...state, view: action.payload };
-    case 'SET_LANGUAGE':
-      return { ...state, language: action.payload };
-    case 'SET_USER_NAME':
-      return { ...state, userName: action.payload };
-    case 'SET_HOME_BACKGROUND':
-      return { ...state, homeBackgroundImage: action.payload };
-    case 'START_HOLE':
-      return {
-        ...state,
-        currentHole: action.payload.hole,
-        currentPar: action.payload.par,
-        currentShots: [], 
-        view: 'PLAY',
-        isEditingMode: false,
-      };
-    case 'SET_CURRENT_PAR':
-      return { ...state, currentPar: action.payload };
-    case 'ADD_SHOT':
-      return { ...state, currentShots: [...state.currentShots, action.payload] };
-    case 'UPDATE_SHOT': {
-      const newShots = [...state.currentShots];
-      newShots[action.payload.index] = action.payload.shot;
-      return { ...state, currentShots: newShots };
-    }
-    case 'DELETE_SHOT': {
-      const newShots = [...state.currentShots];
-      newShots.splice(action.payload, 1);
-      return { ...state, currentShots: newShots };
-    }
+    case 'SET_BAG': return { ...state, myBag: action.payload };
+    case 'SET_VIEW': return { ...state, view: action.payload };
+    case 'SET_LANGUAGE': return { ...state, language: action.payload };
+    case 'SET_USER_NAME': return { ...state, userName: action.payload };
+    case 'SET_HOME_BACKGROUND': return { ...state, homeBackgroundImage: action.payload };
+    case 'START_HOLE': return { ...state, currentHole: action.payload.hole, currentPar: action.payload.par, currentShots: [], view: 'PLAY', isEditingMode: false };
+    case 'SET_CURRENT_PAR': return { ...state, currentPar: action.payload };
+    case 'ADD_SHOT': return { ...state, currentShots: [...state.currentShots, action.payload] };
     case 'FINISH_HOLE': {
       if (state.isEditingMode && state.editingHoleIndex !== -1) {
         const newHistory = [...state.history];
         newHistory[state.editingHoleIndex] = action.payload;
-        return {
-          ...state,
-          history: newHistory,
-          isEditingMode: false,
-          editingHoleIndex: -1,
-          view: 'ANALYSIS',
-        };
+        return { ...state, history: newHistory, isEditingMode: false, editingHoleIndex: -1, view: 'ANALYSIS' };
       }
       const newHistory = [...state.history, action.payload];
       const nextHole = state.currentHole + 1;
-      return {
-        ...state,
-        history: newHistory,
-        maxHoleReached: nextHole,
-        currentHole: nextHole,
-        currentShots: [],
-        view: nextHole > 18 ? 'ANALYSIS' : 'HOLE_SETUP',
-      };
+      return { ...state, history: newHistory, maxHoleReached: nextHole, currentHole: nextHole, currentShots: [], view: nextHole > 18 ? 'ANALYSIS' : 'HOLE_SETUP' };
     }
-    case 'EDIT_HOLE':
-      return {
-        ...state,
-        isEditingMode: true,
-        editingHoleIndex: action.payload.index,
-        currentHole: action.payload.data.holeNumber,
-        currentPar: action.payload.data.par,
-        currentShots: [...action.payload.data.shots],
-        view: 'PLAY',
-      };
     case 'ARCHIVE_ROUND': {
       const totalScore = state.history.reduce((acc, h) => acc + h.score, 0);
       const totalPar = state.history.reduce((acc, h) => acc + h.par, 0);
       const totalPutts = state.history.reduce((acc, h) => acc + h.putts, 0);
-      
-      const newRound: FinishedRound = {
-        id: `round_${Date.now()}`,
-        courseName: action.payload.courseName,
-        date: action.payload.date,
-        playerName: state.userName,
-        holes: [...state.history],
-        totalScore,
-        totalPar,
-        totalPutts
-      };
-
-      return {
-        ...state,
-        currentHole: 1,
-        currentPar: 4,
-        currentShots: [],
-        history: [],
-        isEditingMode: false,
-        editingHoleIndex: -1,
-        maxHoleReached: 1,
-        pastRounds: [newRound, ...state.pastRounds], 
-        view: 'PAST_GAMES' 
-      };
+      const newRound: FinishedRound = { id: `round_${Date.now()}`, courseName: action.payload.courseName, date: action.payload.date, playerName: state.userName, holes: [...state.history], totalScore, totalPar, totalPutts };
+      return { ...state, currentHole: 1, currentPar: 4, currentShots: [], history: [], isEditingMode: false, editingHoleIndex: -1, maxHoleReached: 1, pastRounds: [newRound, ...state.pastRounds], view: 'PAST_GAMES' };
+    }
+    case 'ADD_FRIEND': {
+      const filtered = state.friends.filter(f => f.id !== action.payload.id);
+      return { ...state, friends: [action.payload, ...filtered] };
+    }
+    case 'REMOVE_FRIEND': {
+      return { ...state, friends: state.friends.filter(f => f.id !== action.payload) };
     }
     case 'RESUME_GAME':
-      if (state.history.length >= 18) {
-        return { ...state, isEditingMode: false, editingHoleIndex: -1, view: 'ANALYSIS' };
-      }
-      return {
-        ...state,
-        isEditingMode: false,
-        editingHoleIndex: -1,
-        currentHole: state.maxHoleReached,
-        currentShots: [],
-        view: 'HOLE_SETUP',
-      };
-    case 'RESET_GAME':
-      return { 
-        ...state,
-        view: 'HOME',
-        currentHole: 1,
-        currentPar: 4,
-        currentShots: [],
-        history: [],
-        isEditingMode: false,
-        editingHoleIndex: -1,
-        maxHoleReached: 1,
-        language: state.language,
-        myBag: state.myBag, 
-        userName: state.userName, 
-        homeBackgroundImage: state.homeBackgroundImage,
-        pastRounds: state.pastRounds 
-      }; 
+      return { ...state, isEditingMode: false, editingHoleIndex: -1, view: (state.history.length >= 18) ? 'ANALYSIS' : 'HOLE_SETUP' };
+    case 'RESET_GAME': return { ...state, view: 'HOME', currentHole: 1, currentShots: [], history: [], maxHoleReached: 1 };
     case 'DELETE_ROUND': {
       const newRounds = [...state.pastRounds];
-      if (action.payload >= 0 && action.payload < newRounds.length) {
-        newRounds.splice(action.payload, 1);
-      }
-      return { 
-          ...state, 
-          pastRounds: newRounds 
-      };
+      newRounds.splice(action.payload, 1);
+      return { ...state, pastRounds: newRounds };
     }
-    case 'CLEAR_HISTORY':
-      return { ...state, pastRounds: [] };
-    default:
-      return state;
+    case 'CLEAR_HISTORY': return { ...state, pastRounds: [] };
+    default: return state;
   }
 };
 
@@ -201,7 +105,6 @@ interface GameContextProps {
 }
 
 const GameContext = createContext<GameContextProps | undefined>(undefined);
-
 const LOCAL_STORAGE_KEY = 'golf_master_pro_v2'; 
 
 export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -213,9 +116,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const parsed = JSON.parse(saved);
         dispatch({ type: 'LOAD_STATE', payload: parsed });
-      } catch (e) {
-        console.error("Failed to load state", e);
-      }
+      } catch (e) { console.error(e); }
     }
   }, []);
 
@@ -223,9 +124,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
   }, [state]);
 
-  const t = (key: TranslationKey) => {
-    return translations[state.language][key] || translations['en'][key] || key;
-  };
+  const t = (key: TranslationKey) => translations[state.language][key] || translations['en'][key] || key;
 
   return (
     <GameContext.Provider value={{ state, dispatch, t }}>

@@ -1,11 +1,10 @@
-export type ViewState = 'HOME' | 'BAG_SETUP' | 'HOLE_SETUP' | 'PLAY' | 'ANALYSIS' | 'PAST_GAMES';
+export type ViewState = 'HOME' | 'BAG_SETUP' | 'HOLE_SETUP' | 'PLAY' | 'ANALYSIS' | 'PAST_GAMES' | 'SOCIAL';
 export type Language = 'en' | 'zh-TW';
 
-// Allow any string for custom clubs, but keep the type alias for clarity
 export type ClubName = string;
 
 export interface Shot {
-  id: string; // Unique ID for keying
+  id: string;
   club: ClubName;
   distance: number | null;
   timestamp: number;
@@ -32,27 +31,32 @@ export interface FinishedRound {
   totalPutts: number;
 }
 
+export interface Friend {
+  id: string;
+  name: string;
+  lastUpdated: number;
+  rounds: FinishedRound[];
+}
+
 export interface GameState {
   view: ViewState;
-  language: Language; // Added language
+  language: Language;
   myBag: ClubName[];
-  userName: string; // User's name
+  userName: string;
+  golferId: string; // User's unique ID for friend system
   
-  // Customization
-  homeBackgroundImage?: string | null; // Base64 data string
+  homeBackgroundImage?: string | null;
 
-  // Current Game State
   currentHole: number;
   currentPar: number;
   currentShots: Shot[];
   history: RoundHoleData[];
   
-  // Persistent History
   pastRounds: FinishedRound[];
+  friends: Friend[]; // List of added friends
 
-  // Editing state for current game
   isEditingMode: boolean;
-  editingHoleIndex: number; // Index in history array
+  editingHoleIndex: number;
   maxHoleReached: number;
 }
 

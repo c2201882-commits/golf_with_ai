@@ -50,7 +50,7 @@ export const translations = {
     gameHistory: "Game History",
     noHistory: "No History Yet",
     finishRoundMsg: "Finish a round to see your stats here.",
-    analyzeRound: "Analyze Round",
+    analyzeRound: "AI Analysis",
     getProInsights: "Get Pro Insights",
     clearHistory: "Clear All History",
     clubUsage: "Club Usage",
@@ -78,7 +78,19 @@ export const translations = {
     copied: "Copied!",
     exportImage: "Share Scorecard (Image)",
     editBag: "Manage Bag",
-    done: "Done"
+    done: "Done",
+    socialHub: "Social Hub",
+    friends: "Friends",
+    addFriend: "Add Friend",
+    myId: "My Golfer ID",
+    friendCode: "Friend Code",
+    pasteFriendCode: "Paste friend code here...",
+    shareMyCode: "Share My Profile",
+    noFriends: "No friends added yet.",
+    removeFriend: "Remove Friend",
+    friendRounds: "Friend's History",
+    copySuccess: "Code copied to clipboard!",
+    invalidCode: "Invalid friend code."
   },
   "zh-TW": {
     appTitle: "高爾夫大師 Pro",
@@ -157,6 +169,18 @@ export const translations = {
     copied: "已複製！",
     exportImage: "分享成績單 (匯出圖片)",
     editBag: "管理球桿袋",
-    done: "完成"
+    done: "完成",
+    socialHub: "社交中心",
+    friends: "好友名單",
+    addFriend: "新增好友",
+    myId: "我的球員 ID",
+    friendCode: "好友代碼",
+    pasteFriendCode: "請貼上好友代碼...",
+    shareMyCode: "分享個人檔案",
+    noFriends: "目前還沒有好友",
+    removeFriend: "刪除好友",
+    friendRounds: "好友歷程",
+    copySuccess: "代碼已複製到剪貼簿！",
+    invalidCode: "無效的代碼。"
   }
 };

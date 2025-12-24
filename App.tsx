@@ -6,6 +6,7 @@ import { HoleSetup } from './components/HoleSetup';
 import { PlayHole } from './components/PlayHole';
 import { Analysis } from './components/Analysis';
 import { PastGames } from './components/PastGames';
+import { Social } from './components/Social';
 import { Home } from './components/Home';
 
 const Main: React.FC = () => {
@@ -25,6 +26,8 @@ const Main: React.FC = () => {
         return <Analysis />;
       case 'PAST_GAMES':
         return <PastGames />;
+      case 'SOCIAL':
+        return <Social />;
       default:
         return <Home />;
     }
