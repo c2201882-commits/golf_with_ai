@@ -1,33 +1,89 @@
+
 import React, { useState } from 'react';
 import { useGame } from '../context/GameContext';
-import { Friend, FinishedRound } from '../types';
-import { UserPlus, Share2, Copy, Check, Trash2, Calendar, User, ChevronRight, X, Trophy } from 'lucide-react';
+import { Friend } from '../types';
+import { UserPlus, Share2, Check, Trash2, Calendar, ChevronRight, X, Trophy, AlertCircle } from 'lucide-react';
 
 export const Social: React.FC = () => {
   const { state, dispatch, t } = useGame();
   const [friendCodeInput, setFriendCodeInput] = useState('');
-  const [copied, setCopied] = useState(false);
+  const [showToast, setShowToast] = useState<{msg: string, type: 'success' | 'error'} | null>(null);
   const [viewingFriend, setViewingFriend] = useState<Friend | null>(null);
+
+  const triggerToast = (msg: string, type: 'success' | 'error' = 'success') => {
+    setShowToast({ msg, type });
+    setTimeout(() => setShowToast(null), 3000);
+  };
+
+  // Robust UTF-8 to Base64
+  const utf8_to_b64 = (str: string) => {
+    return window.btoa(unescape(encodeURIComponent(str)));
+  };
+
+  // Robust Base64 to UTF-8
+  const b64_to_utf8 = (str: string) => {
+    return decodeURIComponent(escape(window.atob(str)));
+  };
 
   const generateMyCode = () => {
     const profile = {
       id: state.golferId,
       name: state.userName,
-      rounds: state.pastRounds.slice(0, 10) // Only share last 10 rounds to keep code manageable
+      rounds: state.pastRounds.slice(0, 10) 
     };
-    return btoa(JSON.stringify(profile));
+    return utf8_to_b64(JSON.stringify(profile));
   };
 
-  const handleCopyCode = () => {
+  const handleShare = async () => {
     const code = generateMyCode();
-    navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    
+    // 1. Try Native Web Share API (Best for PWAs on Mobile)
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: t('shareTitle'),
+          text: `${t('shareText')}\n\nCode:\n${code}`,
+        });
+        triggerToast(t('shareSuccess'));
+        return;
+      } catch (err) {
+        // User cancelled or error, fallback to clipboard
+        if ((err as Error).name === 'AbortError') return;
+      }
+    }
+
+    // 2. Fallback: Clipboard API
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(code);
+        triggerToast(t('copySuccess'));
+      } else {
+        throw new Error('Clipboard API unavailable');
+      }
+    } catch (err) {
+      // 3. Last Resort: Hidden Textarea (Classic hack for older PWA shells)
+      const textArea = document.createElement("textarea");
+      textArea.value = code;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-9999px";
+      textArea.style.top = "0";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        triggerToast(t('copySuccess'));
+      } catch (e) {
+        triggerToast('Copy failed, please copy manually', 'error');
+      }
+      document.body.removeChild(textArea);
+    }
   };
 
   const handleAddFriend = () => {
     try {
-      const decoded = JSON.parse(atob(friendCodeInput.trim()));
+      const decodedStr = b64_to_utf8(friendCodeInput.trim());
+      const decoded = JSON.parse(decodedStr);
       if (decoded.id && decoded.name) {
         const newFriend: Friend = {
           id: decoded.id,
@@ -37,18 +93,28 @@ export const Social: React.FC = () => {
         };
         dispatch({ type: 'ADD_FRIEND', payload: newFriend });
         setFriendCodeInput('');
-        alert('Friend added successfully!');
+        triggerToast(t('friendAdded'));
+      } else {
+        throw new Error('Missing fields');
       }
     } catch (e) {
-      alert(t('invalidCode'));
+      triggerToast(t('invalidCode'), 'error');
     }
   };
 
   return (
-    <div className="px-4 pt-4 pb-24 max-w-2xl mx-auto space-y-6">
+    <div className="px-4 pt-4 pb-24 max-w-2xl mx-auto space-y-6 relative">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-gray-900">{t('socialHub')}</h2>
       </div>
+
+      {/* Toast Notification */}
+      {showToast && (
+        <div className={`fixed top-20 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-full shadow-2xl flex items-center gap-2 animate-bounce-short text-white font-bold text-sm ${showToast.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>
+          {showToast.type === 'success' ? <Check size={18}/> : <AlertCircle size={18}/>}
+          {showToast.msg}
+        </div>
+      )}
 
       {/* My Profile Sharing Card */}
       <div className="bg-indigo-600 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden">
@@ -57,11 +123,11 @@ export const Social: React.FC = () => {
             <div className="text-2xl font-black mb-4">{state.golferId}</div>
             
             <button 
-                onClick={handleCopyCode}
+                onClick={handleShare}
                 className="w-full bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95"
             >
-                {copied ? <Check size={18} /> : <Share2 size={18} />}
-                {copied ? t('copied') : t('shareMyCode')}
+                <Share2 size={18} />
+                {t('shareMyCode')}
             </button>
         </div>
         <div className="absolute top-[-20px] right-[-20px] w-32 h-32 bg-white/10 rounded-full blur-3xl"></div>
@@ -130,7 +196,7 @@ export const Social: React.FC = () => {
 
       {/* Friend Detail Modal */}
       {viewingFriend && (
-          <div className="fixed inset-0 z-50 bg-white animate-fade-in flex flex-col">
+          <div className="fixed inset-0 z-[110] bg-white animate-fade-in flex flex-col">
               <div className="bg-primary text-white pt-safe-top pb-4 px-4 flex items-center justify-between shadow-md">
                   <div className="flex items-center gap-3">
                       <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center font-bold">
@@ -162,7 +228,7 @@ export const Social: React.FC = () => {
                                           {round.totalScore}
                                       </div>
                                       <div className="text-[10px] text-gray-400 font-bold uppercase">
-                                          Total Score
+                                          Score
                                       </div>
                                   </div>
                               </div>

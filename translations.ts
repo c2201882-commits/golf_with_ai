@@ -1,3 +1,4 @@
+
 export type TranslationKey = keyof typeof translations.en;
 
 export const translations = {
@@ -90,7 +91,11 @@ export const translations = {
     removeFriend: "Remove Friend",
     friendRounds: "Friend's History",
     copySuccess: "Code copied to clipboard!",
-    invalidCode: "Invalid friend code."
+    invalidCode: "Invalid friend code.",
+    shareTitle: "My Golf Master Pro Profile",
+    shareText: "Add me on Golf Master Pro to see my rounds!",
+    shareSuccess: "Shared successfully!",
+    friendAdded: "Friend added successfully!"
   },
   "zh-TW": {
     appTitle: "高爾夫大師 Pro",
@@ -181,6 +186,10 @@ export const translations = {
     removeFriend: "刪除好友",
     friendRounds: "好友歷程",
     copySuccess: "代碼已複製到剪貼簿！",
-    invalidCode: "無效的代碼。"
+    invalidCode: "無效的代碼。",
+    shareTitle: "我的高爾夫大師 Pro 檔案",
+    shareText: "將我的代碼加入好友，查看我的比賽紀錄！",
+    shareSuccess: "分享成功！",
+    friendAdded: "好友已成功新增！"
   }
 };
