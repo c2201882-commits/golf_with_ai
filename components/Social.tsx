@@ -20,9 +20,15 @@ export const Social: React.FC = () => {
     return window.btoa(unescape(encodeURIComponent(str)));
   };
 
-  // Robust Base64 to UTF-8
+  // Robust Base64 to UTF-8 with cleanup for weird characters/newlines
   const b64_to_utf8 = (str: string) => {
-    return decodeURIComponent(escape(window.atob(str)));
+    try {
+      // Remove any potential whitespace or non-base64 chars before decoding
+      const cleaned = str.replace(/[^A-Za-z0-9+/=]/g, "");
+      return decodeURIComponent(escape(window.atob(cleaned)));
+    } catch (e) {
+      throw new Error('Base64 decoding failed');
+    }
   };
 
   const generateMyCode = () => {
@@ -36,18 +42,18 @@ export const Social: React.FC = () => {
 
   const handleShare = async () => {
     const code = generateMyCode();
+    const shareMessage = `${t('shareText')}\n\nCode:\n${code}`;
     
     // 1. Try Native Web Share API (Best for PWAs on Mobile)
     if (navigator.share) {
       try {
         await navigator.share({
           title: t('shareTitle'),
-          text: `${t('shareText')}\n\nCode:\n${code}`,
+          text: shareMessage,
         });
-        triggerToast(t('shareSuccess'));
+        // Note: No toast here because the system share UI already provides feedback
         return;
       } catch (err) {
-        // User cancelled or error, fallback to clipboard
         if ((err as Error).name === 'AbortError') return;
       }
     }
@@ -55,18 +61,18 @@ export const Social: React.FC = () => {
     // 2. Fallback: Clipboard API
     try {
       if (navigator.clipboard && window.isSecureContext) {
+        // Only copy the code itself to clipboard for easier manual pasting
         await navigator.clipboard.writeText(code);
         triggerToast(t('copySuccess'));
       } else {
         throw new Error('Clipboard API unavailable');
       }
     } catch (err) {
-      // 3. Last Resort: Hidden Textarea (Classic hack for older PWA shells)
+      // 3. Last Resort: Hidden Textarea
       const textArea = document.createElement("textarea");
       textArea.value = code;
       textArea.style.position = "fixed";
       textArea.style.left = "-9999px";
-      textArea.style.top = "0";
       document.body.appendChild(textArea);
       textArea.focus();
       textArea.select();
@@ -74,16 +80,29 @@ export const Social: React.FC = () => {
         document.execCommand('copy');
         triggerToast(t('copySuccess'));
       } catch (e) {
-        triggerToast('Copy failed, please copy manually', 'error');
+        triggerToast('Copy failed', 'error');
       }
       document.body.removeChild(textArea);
     }
   };
 
   const handleAddFriend = () => {
+    const rawInput = friendCodeInput.trim();
+    if (!rawInput) return;
+
     try {
-      const decodedStr = b64_to_utf8(friendCodeInput.trim());
+      // --- SMART EXTRACTION ---
+      // Base64 JSON strings for our profile object almost always start with 'ey' (which is '{"' in B64)
+      // We look for the longest alphanumeric string that looks like Base64.
+      const base64Regex = /[A-Za-z0-9+/]{30,}/g;
+      const matches = rawInput.match(base64Regex);
+      
+      // Use the longest match found in the text, or the whole input if no match
+      const codeToDecode = matches ? matches.reduce((a, b) => a.length > b.length ? a : b) : rawInput;
+
+      const decodedStr = b64_to_utf8(codeToDecode);
       const decoded = JSON.parse(decodedStr);
+      
       if (decoded.id && decoded.name) {
         const newFriend: Friend = {
           id: decoded.id,
@@ -95,9 +114,10 @@ export const Social: React.FC = () => {
         setFriendCodeInput('');
         triggerToast(t('friendAdded'));
       } else {
-        throw new Error('Missing fields');
+        throw new Error('Missing ID or Name');
       }
     } catch (e) {
+      console.error('Friend add error:', e);
       triggerToast(t('invalidCode'), 'error');
     }
   };
@@ -141,7 +161,7 @@ export const Social: React.FC = () => {
                   value={friendCodeInput}
                   onChange={(e) => setFriendCodeInput(e.target.value)}
                   placeholder={t('pasteFriendCode')}
-                  className="w-full h-20 bg-gray-50 border border-gray-100 rounded-xl p-3 text-xs focus:outline-none focus:border-primary no-scrollbar resize-none"
+                  className="w-full h-24 bg-gray-50 border border-gray-100 rounded-xl p-3 text-sm focus:outline-none focus:border-primary no-scrollbar resize-none text-gray-700"
               />
               <button 
                   onClick={handleAddFriend}
@@ -183,7 +203,11 @@ export const Social: React.FC = () => {
                       </div>
                       <div className="bg-gray-50 px-5 py-2 flex justify-end">
                           <button 
-                              onClick={() => dispatch({ type: 'REMOVE_FRIEND', payload: friend.id })}
+                              onClick={() => {
+                                if(confirm(t('confirmDelete'))) {
+                                  dispatch({ type: 'REMOVE_FRIEND', payload: friend.id });
+                                }
+                              }}
                               className="text-[10px] text-red-400 font-black uppercase tracking-widest flex items-center gap-1 hover:text-red-600"
                           >
                               <Trash2 size={12}/> {t('removeFriend')}
@@ -232,8 +256,8 @@ export const Social: React.FC = () => {
                                       </div>
                                   </div>
                               </div>
-                              <div className="mt-4 flex gap-2 overflow-x-auto no-scrollbar">
-                                  {round.holes.slice(0, 9).map(h => (
+                              <div className="mt-4 flex gap-2 overflow-x-auto no-scrollbar pb-2">
+                                  {round.holes.slice(0, 18).map(h => (
                                       <div key={h.holeNumber} className="shrink-0 flex flex-col items-center">
                                           <div className="text-[9px] font-bold text-gray-300">H{h.holeNumber}</div>
                                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold border ${h.score < h.par ? 'bg-blue-50 border-blue-200 text-blue-600' : h.score > h.par ? 'bg-red-50 border-red-200 text-red-600' : 'bg-gray-50 border-gray-100 text-gray-600'}`}>
