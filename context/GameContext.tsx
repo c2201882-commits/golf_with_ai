@@ -16,9 +16,10 @@ type Action =
   | { type: 'ADD_SHOT'; payload: Shot }
   | { type: 'UPDATE_SHOT'; payload: { index: number; shot: Shot } }
   | { type: 'DELETE_SHOT'; payload: number } 
+  | { type: 'START_EDIT_HOLE'; payload: { index: number } }
   | { type: 'FINISH_HOLE'; payload: RoundHoleData }
-  | { type: 'EDIT_HOLE'; payload: { index: number; data: RoundHoleData } }
   | { type: 'ARCHIVE_ROUND'; payload: { courseName: string; date: string } }
+  | { type: 'UPDATE_PAST_ROUND'; payload: { roundId: string; updatedRound: FinishedRound } }
   | { type: 'RESUME_GAME' }
   | { type: 'RESET_GAME' }
   | { type: 'DELETE_ROUND'; payload: number } 
@@ -66,13 +67,31 @@ const gameReducer = (state: GameState, action: Action): GameState => {
     case 'START_HOLE': return { ...state, currentHole: action.payload.hole, currentPar: action.payload.par, currentShots: [], view: 'PLAY', isEditingMode: false };
     case 'SET_CURRENT_PAR': return { ...state, currentPar: action.payload };
     case 'ADD_SHOT': return { ...state, currentShots: [...state.currentShots, action.payload] };
+    case 'UPDATE_SHOT': {
+      const newShots = [...state.currentShots];
+      newShots[action.payload.index] = action.payload.shot;
+      return { ...state, currentShots: newShots };
+    }
+    case 'DELETE_SHOT': return { ...state, currentShots: state.currentShots.filter((_, i) => i !== action.payload) };
+    case 'START_EDIT_HOLE': {
+      const holeData = state.history[action.payload.index];
+      return {
+        ...state,
+        currentHole: holeData.holeNumber,
+        currentPar: holeData.par,
+        currentShots: [...holeData.shots],
+        isEditingMode: true,
+        editingHoleIndex: action.payload.index,
+        view: 'PLAY'
+      };
+    }
     case 'FINISH_HOLE': {
+      const newHistory = [...state.history];
       if (state.isEditingMode && state.editingHoleIndex !== -1) {
-        const newHistory = [...state.history];
         newHistory[state.editingHoleIndex] = action.payload;
         return { ...state, history: newHistory, isEditingMode: false, editingHoleIndex: -1, view: 'ANALYSIS' };
       }
-      const newHistory = [...state.history, action.payload];
+      newHistory.push(action.payload);
       const nextHole = state.currentHole + 1;
       return { ...state, history: newHistory, maxHoleReached: nextHole, currentHole: nextHole, currentShots: [], view: nextHole > 18 ? 'ANALYSIS' : 'HOLE_SETUP' };
     }
@@ -82,6 +101,12 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       const totalPutts = state.history.reduce((acc, h) => acc + h.putts, 0);
       const newRound: FinishedRound = { id: `round_${Date.now()}`, courseName: action.payload.courseName, date: action.payload.date, playerName: state.userName, holes: [...state.history], totalScore, totalPar, totalPutts };
       return { ...state, currentHole: 1, currentPar: 4, currentShots: [], history: [], pastRounds: [newRound, ...state.pastRounds], view: 'PAST_GAMES' };
+    }
+    case 'UPDATE_PAST_ROUND': {
+      return {
+        ...state,
+        pastRounds: state.pastRounds.map(r => r.id === action.payload.roundId ? action.payload.updatedRound : r)
+      };
     }
     case 'ADD_FRIEND': {
       const exists = state.friends.some(f => f.id === action.payload.id);
@@ -101,11 +126,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         ...state,
         friends: state.friends.map(f => {
           if (f.id === action.payload.id) {
-            // 修正：直接以傳過來的數據為準，這樣刪除才能同步
-            return { 
-              ...action.payload, 
-              lastUpdated: Date.now() 
-            };
+            return { ...action.payload, lastUpdated: Date.now() };
           }
           return f;
         })
@@ -134,7 +155,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const peerRef = useRef<any>(null);
   const activeConnections = useRef<Map<string, any>>(new Map());
 
-  // 1. 數據載入
   useEffect(() => {
     const saved = localStorage.getItem(CURRENT_STORAGE_KEY);
     if (saved) {
@@ -146,37 +166,19 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsDataLoaded(true);
   }, []);
 
-  // 2. 自動存檔
   useEffect(() => {
     if (isDataLoaded) {
       localStorage.setItem(CURRENT_STORAGE_KEY, JSON.stringify(state));
     }
   }, [state, isDataLoaded]);
 
-  // 3. P2P 同步邏輯 (精簡版，只管數據交換)
   useEffect(() => {
     if (!isDataLoaded || !state.golferId) return;
 
     const peer = new Peer(state.golferId);
     peerRef.current = peer;
 
-    const broadcastMyData = () => {
-      activeConnections.current.forEach(conn => {
-        if (conn.open) {
-          conn.send({
-            type: 'SYNC_DATA',
-            payload: {
-              id: state.golferId,
-              name: state.userName,
-              rounds: state.pastRounds.slice(0, 50) // 送出最近 50 場
-            }
-          });
-        }
-      });
-    };
-
     peer.on('open', () => {
-      // 嘗試連線所有好友
       state.friends.forEach(friend => {
         const conn = peer.connect(friend.id);
         setupConnection(conn);
@@ -190,7 +192,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const setupConnection = (conn: any) => {
         conn.on('open', () => {
             activeConnections.current.set(conn.peer, conn);
-            // 連上後立刻互相交換資料
             conn.send({
                 type: 'SYNC_DATA',
                 payload: {
@@ -213,7 +214,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         conn.on('close', () => activeConnections.current.delete(conn.peer));
     };
 
-    // 每 2 分鐘嘗試重連
     const retryInterval = setInterval(() => {
         state.friends.forEach(f => {
             if (!activeConnections.current.has(f.id)) {
@@ -228,7 +228,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [isDataLoaded, state.golferId, state.friends.length]);
 
-  // 當「我的紀錄」發生變化（新增或刪除）時，通知好友
   useEffect(() => {
     if (!isDataLoaded) return;
     activeConnections.current.forEach(conn => {

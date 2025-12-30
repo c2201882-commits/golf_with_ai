@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useGame } from '../context/GameContext';
 import { Download, ChevronRight, Play, Save, Trash2, Trophy } from 'lucide-react';
@@ -8,7 +9,6 @@ export const Analysis: React.FC = () => {
   const [courseName, setCourseName] = useState('');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10)); // YYYY-MM-DD
 
-  // Stats Calcs
   const totalScore = state.history.reduce((acc, h) => acc + h.score, 0);
   const totalPar = state.history.reduce((acc, h) => acc + h.par, 0);
   const totalPutts = state.history.reduce((acc, h) => acc + h.putts, 0);
@@ -19,17 +19,14 @@ export const Analysis: React.FC = () => {
 
   const downloadCSV = () => {
     if (state.history.length === 0) return;
-    
     let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
     csvContent += `Player,${state.userName}\nCourse,${courseName || 'Unknown'}\nDate,${date}\n\n`;
     csvContent += "Hole,Par,Score,Putts,GIR,Shot Number,Club,Distance\n";
-    
     state.history.forEach(h => {
         h.shots.forEach((s, idx) => {
             csvContent += `${h.holeNumber},${h.par},${h.score},${h.putts},${h.gir ? 'Y' : 'N'},${idx + 1},${s.club},${s.distance || ''}\n`;
         });
     });
-
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
@@ -45,14 +42,7 @@ export const Analysis: React.FC = () => {
         alert(t('enterCourse'));
         return;
     }
-    
-    dispatch({
-        type: 'ARCHIVE_ROUND',
-        payload: {
-            courseName: courseName.trim(),
-            date: date
-        }
-    });
+    dispatch({ type: 'ARCHIVE_ROUND', payload: { courseName: courseName.trim(), date: date } });
   };
 
   const handleDiscardGame = () => {
@@ -61,61 +51,47 @@ export const Analysis: React.FC = () => {
       }
   };
 
-  // Helper to render traditional symbols based on the provided legend image
   const renderTraditionalScore = (score: number, par: number) => {
     const diff = score - par;
     const baseClass = "inline-flex items-center justify-center w-9 h-9 font-black text-sm relative transition-all";
-    
-    if (diff === 0) { // Par -> No Border
-        return <span className={`${baseClass} text-gray-900`}>{score}</span>;
-    } else if (diff === -1) { // Birdie -> Single Circle
-        return <span className={`${baseClass} border border-gray-400 rounded-full text-gray-900`}>{score}</span>;
-    } else if (diff <= -2) { // Eagle -> Double Circle
-        return (
-            <span className={`${baseClass} border border-gray-400 rounded-full text-gray-900`}>
-                <span className="absolute inset-[2px] border border-gray-400 rounded-full"></span>
-                {score}
-            </span>
-        );
-    } else if (diff === 1) { // Bogey -> Single Square
-        return <span className={`${baseClass} border border-gray-400 text-gray-900`}>{score}</span>;
-    } else if (diff === 2) { // Double Bogey -> Double Square
-        return (
-            <span className={`${baseClass} border border-gray-400 text-gray-900`}>
-                <span className="absolute inset-[2px] border border-gray-400"></span>
-                {score}
-            </span>
-        );
-    } else if (diff >= 3) { // Max -> Red Burst
-        return (
-            <span className={`${baseClass} text-white font-black z-10`}>
-                <svg className="absolute inset-0 w-full h-full -z-10 text-red-500 scale-110" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2L14.4 5.6H18.4L18.4 9.6L22 12L18.4 14.4V18.4H14.4L12 22L9.6 18.4H5.6V14.4L2 12L5.6 9.6V5.6H9.6L12 2Z" />
-                </svg>
-                {score}
-            </span>
-        );
-    }
-    
+    if (diff === 0) return <span className={`${baseClass} text-gray-900`}>{score}</span>;
+    if (diff === -1) return <span className={`${baseClass} border border-gray-400 rounded-full text-gray-900`}>{score}</span>;
+    if (diff <= -2) return (
+        <span className={`${baseClass} border border-gray-400 rounded-full text-gray-900`}>
+            <span className="absolute inset-[2px] border border-gray-400 rounded-full"></span>
+            {score}
+        </span>
+    );
+    if (diff === 1) return <span className={`${baseClass} border border-gray-400 text-gray-900`}>{score}</span>;
+    if (diff === 2) return (
+        <span className={`${baseClass} border border-gray-400 text-gray-900`}>
+            <span className="absolute inset-[2px] border border-gray-400"></span>
+            {score}
+        </span>
+    );
+    if (diff >= 3) return (
+        <span className={`${baseClass} text-white font-black z-10`}>
+            <svg className="absolute inset-0 w-full h-full -z-10 text-red-500 scale-110" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2L14.4 5.6H18.4L18.4 9.6L22 12L18.4 14.4V18.4H14.4L12 22L9.6 18.4H5.6V14.4L2 12L5.6 9.6V5.6H9.6L12 2Z" />
+            </svg>
+            {score}
+        </span>
+    );
     return <span className={`${baseClass}`}>{score}</span>;
   };
 
   return (
     <div className="px-4 pt-4 pb-safe-bottom max-w-2xl mx-auto">
-      {/* Score Header */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
         <h2 className="text-xl font-bold text-gray-800 mb-6 flex justify-between">
             <span>{t('currentRound')}</span>
             <span className="text-primary text-base font-normal">{state.userName}</span>
         </h2>
-        
         <div className="grid grid-cols-2 gap-4 text-center">
             <div className="bg-gray-50 rounded-xl p-4">
                 <div className="text-gray-400 text-xs font-bold uppercase tracking-wider">{t('score')}</div>
                 <div className="text-3xl font-black text-gray-900 mt-1">{totalScore}</div>
-                <div className={`text-sm font-bold ${scoreDiff > 0 ? 'text-red-500' : 'text-blue-500'}`}>
-                    {scoreDiffDisplay}
-                </div>
+                <div className={`text-sm font-bold ${scoreDiff > 0 ? 'text-red-500' : 'text-blue-500'}`}>{scoreDiffDisplay}</div>
             </div>
             <div className="bg-gray-50 rounded-xl p-4">
                 <div className="text-gray-400 text-xs font-bold uppercase tracking-wider">{t('putts')}</div>
@@ -134,24 +110,12 @@ export const Analysis: React.FC = () => {
       </div>
 
       <div className="flex gap-3 mb-6">
-          <button 
-             onClick={downloadCSV}
-             className="flex-1 bg-blue-50 text-blue-600 py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-transform border border-blue-200"
-          >
-              <Download size={18} /> {t('exportCsv')}
-          </button>
-          
+          <button onClick={downloadCSV} className="flex-1 bg-blue-50 text-blue-600 py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-transform border border-blue-200"><Download size={18} /> {t('exportCsv')}</button>
           {state.history.length < 18 && (
-              <button 
-                onClick={() => dispatch({ type: 'RESUME_GAME' })}
-                className="flex-1 bg-primary text-white py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-md shadow-green-200"
-              >
-                  <Play size={18} /> {t('resume')}
-              </button>
+              <button onClick={() => dispatch({ type: 'RESUME_GAME' })} className="flex-1 bg-primary text-white py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-md shadow-green-200"><Play size={18} /> {t('resume')}</button>
           )}
       </div>
 
-      {/* Hole Table */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-8">
           <table className="w-full text-sm">
               <thead className="bg-primary text-white">
@@ -165,89 +129,41 @@ export const Analysis: React.FC = () => {
                   </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                  {state.history.map((h, idx) => {
-                      return (
-                          <tr 
-                            key={idx} 
-                            onClick={() => dispatch({ type: 'EDIT_HOLE', payload: { index: idx, data: h } })}
-                            className="hover:bg-gray-50 active:bg-gray-100 cursor-pointer transition-colors"
-                          >
-                              <td className="py-3 px-2 text-center font-bold bg-gray-50 text-gray-600">{h.holeNumber}</td>
-                              <td className="py-3 px-2 text-center text-gray-500">{h.par}</td>
-                              <td className="py-3 px-2 text-center">
-                                  {renderTraditionalScore(h.score, h.par)}
-                              </td>
-                              <td className="py-3 px-2 text-center text-gray-600">{h.putts}</td>
-                              <td className="py-3 px-2 text-center">
-                                  {h.gir ? <span className="text-primary font-bold">✓</span> : <span className="text-gray-300">-</span>}
-                              </td>
-                              <td className="py-3 px-2 text-center text-gray-300">
-                                  <ChevronRight size={16} />
-                              </td>
-                          </tr>
-                      );
-                  })}
+                  {state.history.map((h, idx) => (
+                      <tr key={idx} onClick={() => dispatch({ type: 'START_EDIT_HOLE', payload: { index: idx } })} className="hover:bg-gray-50 active:bg-gray-100 cursor-pointer transition-colors">
+                          <td className="py-3 px-2 text-center font-bold bg-gray-50 text-gray-600">{h.holeNumber}</td>
+                          <td className="py-3 px-2 text-center text-gray-500">{h.par}</td>
+                          <td className="py-3 px-2 text-center">{renderTraditionalScore(h.score, h.par)}</td>
+                          <td className="py-3 px-2 text-center text-gray-600">{h.putts}</td>
+                          <td className="py-3 px-2 text-center">{h.gir ? <span className="text-primary font-bold">✓</span> : <span className="text-gray-300">-</span>}</td>
+                          <td className="py-3 px-2 text-center text-gray-300"><ChevronRight size={16} /></td>
+                      </tr>
+                  ))}
               </tbody>
           </table>
-          {state.history.length === 0 && (
-              <div className="p-8 text-center text-gray-400">No data recorded yet.</div>
-          )}
+          {state.history.length === 0 && <div className="p-8 text-center text-gray-400">No data recorded yet.</div>}
       </div>
       
-      {/* End Game / Archive Section */}
       {state.history.length > 0 && (
         <div className="bg-gray-900 text-white p-6 rounded-2xl mb-8 shadow-lg">
-            <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                <Trophy size={20} className="text-yellow-400" />
-                {t('finishSave')}
-            </h3>
-            <p className="text-sm text-gray-300 mb-6">
-                Enter details below to permanently save this round to your history.
-            </p>
-            
+            <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Trophy size={20} className="text-yellow-400" />{t('finishSave')}</h3>
+            <p className="text-sm text-gray-300 mb-6">Enter details below to permanently save this round to your history.</p>
             <form onSubmit={handleFinishGame} className="space-y-4">
                 <div>
                     <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">{t('courseName')}</label>
-                    <input 
-                        required
-                        type="text" 
-                        value={courseName}
-                        onChange={(e) => setCourseName(e.target.value)}
-                        placeholder="e.g. Pebble Beach"
-                        className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 focus:outline-none focus:border-green-500 text-white placeholder-gray-500"
-                    />
+                    <input required type="text" value={courseName} onChange={(e) => setCourseName(e.target.value)} placeholder="e.g. Pebble Beach" className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 focus:outline-none focus:border-green-500 text-white placeholder-gray-500" />
                 </div>
-                
                 <div>
                     <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">{t('datePlayed')}</label>
-                    <input 
-                        required
-                        type="date" 
-                        value={date}
-                        onChange={(e) => setDate(e.target.value)}
-                        className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 focus:outline-none focus:border-green-500 text-white"
-                    />
+                    <input required type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 focus:outline-none focus:border-green-500 text-white" />
                 </div>
-
-                <button 
-                  type="submit"
-                  className="w-full bg-green-600 hover:bg-green-500 text-white py-4 rounded-xl font-bold text-lg shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2 mt-2"
-                >
-                    <Save size={20} /> {t('saveHistory')}
-                </button>
+                <button type="submit" className="w-full bg-green-600 hover:bg-green-500 text-white py-4 rounded-xl font-bold text-lg shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2 mt-2"><Save size={20} /> {t('saveHistory')}</button>
             </form>
         </div>
       )}
-
-      {/* Discard Section */}
       {state.history.length > 0 && (
           <div className="mb-8 text-center">
-            <button 
-                onClick={handleDiscardGame}
-                className="text-red-400 text-sm font-semibold flex items-center justify-center gap-2 mx-auto hover:text-red-500 px-4 py-2 border border-red-100 rounded-lg hover:bg-red-50 transition-colors"
-            >
-                <Trash2 size={16} /> {t('discardRound')}
-            </button>
+            <button onClick={handleDiscardGame} className="text-red-400 text-sm font-semibold flex items-center justify-center gap-2 mx-auto hover:text-red-500 px-4 py-2 border border-red-100 rounded-lg hover:bg-red-50 transition-colors"><Trash2 size={16} /> {t('discardRound')}</button>
           </div>
       )}
     </div>
